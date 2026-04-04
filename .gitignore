@@ -34,3 +34,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# project specific
+.env.local
+database/(*.backup|*.bak)
+/node_modules/

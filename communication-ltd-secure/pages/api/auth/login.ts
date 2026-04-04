@@ -1,0 +1,134 @@
+import type { NextApiRequest, NextApiResponse } from "next";
+import { getConnection } from "@/lib/db";
+import { comparePasswordsSecure, buildSecureLoginQuery } from "@/lib/auth";
+import sql from "mssql";
+
+type ResponseData = {
+  success: boolean;
+  message: string;
+  user?: any;
+};
+
+/**
+ * SECURE Login API Endpoint
+ * POST /api/auth/login
+ *
+ * SECURITY FEATURES:
+ * 1. Parameterized queries prevent SQL injection
+ * 2. Bcryptjs password comparison (timing-safe)
+ * 3. Rate limiting (tracks login attempts)
+ * 4. Account lockout after N failed attempts
+ * 5. Generic error messages (no information leakage)
+ */
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse<ResponseData>,
+) {
+  if (req.method !== "POST") {
+    return res
+      .status(405)
+      .json({ success: false, message: "Method not allowed" });
+  }
+
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Username and password required" });
+  }
+
+  try {
+    // SECURE: Use parameterized query
+    // WHY: SQL Server treats @username as data, not code
+    // Even "admin' OR '1'='1' --" is just a literal string to match
+    const query = buildSecureLoginQuery();
+
+    const pool = await getConnection();
+    const request = pool.request();
+
+    // SECURE: Parameters passed separately
+    request.input("username", sql.NVarChar, username);
+    request.input("password_hash", sql.NVarChar, ""); // Will use real hash from DB
+
+    // SECURE: First query - find user by username only
+    const userQuery = `SELECT id, username, email, password_hash, login_attempts, locked_until FROM Users WHERE username = @username`;
+    const userRequest = pool.request();
+    userRequest.input("username", sql.NVarChar, username);
+    const userResult = await userRequest.query(userQuery);
+
+    if (userResult.recordset.length === 0) {
+      // SECURE: Generic error message (no username enumeration)
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials",
+      });
+    }
+
+    const user = userResult.recordset[0];
+
+    // SECURE: Check if account is locked
+    const maxAttempts = parseInt(process.env.CONFIG_MAX_LOGIN_ATTEMPTS || "3");
+    if (user.locked_until && new Date(user.locked_until) > new Date()) {
+      return res.status(403).json({
+        success: false,
+        message: "Account temporarily locked. Try again later.",
+      });
+    }
+
+    // SECURE: Compare hashed passwords with timing-safe function
+    const passwordMatch = await comparePasswordsSecure(
+      password,
+      user.password_hash,
+    );
+
+    if (!passwordMatch) {
+      // SECURE: Increment login attempts
+      const newAttempts = user.login_attempts + 1;
+      let lockedUntil = null;
+
+      if (newAttempts >= maxAttempts) {
+        // Lock account for 15 minutes
+        lockedUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      }
+
+      // Update failed attempts
+      const updateQuery = `UPDATE Users SET login_attempts = @attempts, locked_until = @locked_until WHERE id = @id`;
+      const updateRequest = pool.request();
+      updateRequest.input("attempts", sql.Int, newAttempts);
+      updateRequest.input("locked_until", sql.DateTime, lockedUntil);
+      updateRequest.input("id", sql.Int, user.id);
+      await updateRequest.query(updateQuery);
+
+      // SECURE: Generic error message
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials",
+      });
+    }
+
+    // SECURE: Reset login attempts on successful login
+    const resetQuery = `UPDATE Users SET login_attempts = 0, locked_until = NULL WHERE id = @id`;
+    const resetRequest = pool.request();
+    resetRequest.input("id", sql.Int, user.id);
+    await resetRequest.query(resetQuery);
+
+    return res.status(200).json({
+      success: true,
+      message: `Login successful for user '${user.username}' (SECURE VERSION)`,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+      },
+    });
+  } catch (error: any) {
+    console.error("Login error:", error);
+
+    // SECURE: Generic error message (don't reveal database errors)
+    return res.status(500).json({
+      success: false,
+      message: "Login failed",
+    });
+  }
+}
