@@ -5,7 +5,6 @@ import {
   hashPasswordSecure,
   comparePasswordsSecure,
 } from "@/lib/auth";
-import sql from "mssql";
 
 type ResponseData = {
   success: boolean;
@@ -75,21 +74,17 @@ export default async function handler(
   }
 
   try {
-    const pool = await getConnection();
-    const request = pool.request();
+    const db = await getConnection();
 
     // SECURE: Parameterized query to fetch user
-    request.input("user_id", sql.Int, userId);
-    const userQuery = `SELECT id, password_hash, password_history FROM Users WHERE id = @user_id`;
-    const userResult = await request.query(userQuery);
+    const userQuery = `SELECT id, password_hash, password_history FROM Users WHERE id = ?`;
+    const user = await db.get(userQuery, [userId]);
 
-    if (userResult.recordset.length === 0) {
+    if (!user) {
       return res
         .status(404)
         .json({ success: false, message: "User not found" });
     }
-
-    const user = userResult.recordset[0];
 
     // SECURE: Verify old password before allowing change
     // WHY: Ensures only the real user can change their own password
@@ -138,16 +133,28 @@ export default async function handler(
     );
 
     // SECURE: Parameterized update query
-    const updateRequest = pool.request();
-    updateRequest.input("user_id", sql.Int, userId);
-    updateRequest.input("password_hash", sql.NVarChar, newHash);
-    updateRequest.input(
-      "password_history",
-      sql.NVarChar,
-      JSON.stringify(newHistory),
-    );
-
     const updateQuery = `UPDATE Users 
+                         SET password_hash = ?, 
+                             password_history = ?,
+                             password_changed_date = CURRENT_TIMESTAMP 
+                         WHERE id = ?`;
+
+    await db.run(updateQuery, [newHash, JSON.stringify(newHistory), userId]);
+
+    return res.status(200).json({
+      success: true,
+      message: "Password changed successfully (SECURE VERSION)",
+    });
+  } catch (error: any) {
+    console.error("Change password error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to change password",
+    });
+  }
+}
+
                          SET password_hash = @password_hash, 
                              password_history = @password_history,
                              password_changed_date = GETDATE() 

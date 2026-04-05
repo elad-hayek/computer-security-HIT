@@ -1,7 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection } from "@/lib/db";
 import crypto from "crypto";
-import sql from "mssql";
 
 type ResponseData = {
   success: boolean;
@@ -32,20 +31,20 @@ export default async function handler(
   }
 
   try {
-    const pool = await getConnection();
+    const db = await getConnection();
 
     // VULNERABLE: Direct query without parameterization
     const query = `SELECT id, email FROM Users WHERE email = '${email}'`;
-    const result = await pool.request().query(query);
+    const result = await db.all(query);
 
-    if (result.recordset.length === 0) {
+    if (result.length === 0) {
       // VULNERABLE: Reveals whether email exists
       return res
         .status(404)
         .json({ success: false, message: "Email not found" });
     }
 
-    const user = result.recordset[0];
+    const user = result[0];
 
     // Generate token
     const token = crypto.randomBytes(32).toString("hex");
@@ -57,7 +56,7 @@ export default async function handler(
     // VULNERABLE: Direct string concatenation
     const insertQuery = `INSERT INTO PasswordResetTokens (user_id, token_hash, expiry_date, used) VALUES (${user.id}, '${tokenHash}', '${expiry.toISOString()}', 0)`;
 
-    await pool.request().query(insertQuery);
+    await db.run(insertQuery);
 
     // In real application, would send email
     // For demo, log token to console

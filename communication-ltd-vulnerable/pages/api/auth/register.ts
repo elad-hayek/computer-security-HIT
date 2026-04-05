@@ -4,7 +4,6 @@ import {
   validatePasswordPolicy,
   hashPasswordVulnerable,
   generateSalt,
-  buildVulnerableRegisterQuery,
 } from "@/lib/auth";
 
 type ResponseData = {
@@ -76,19 +75,14 @@ export default async function handler(
     // VULNERABLE: Build query with string concatenation
     // WHY THIS IS BAD: SQL Injection attack possible
     // Example attack: username = "'); DROP TABLE Users; --"
-    const query = buildVulnerableRegisterQuery(
-      username,
-      email,
-      passwordHash,
-      salt,
-    );
+    const query = `INSERT INTO Users (username, email, password_hash, salt, created_date) VALUES ('${username}', '${email}', '${passwordHash}', '${salt}', CURRENT_TIMESTAMP)`;
 
     console.log("[DEBUG] Executing query:", query); // Dangerous - shows SQL
 
-    const pool = await getConnection();
+    const db = await getConnection();
 
     // VULNERABLE: Direct string concatenation
-    const result = await pool.request().query(query);
+    await db.run(query);
 
     return res.status(201).json({
       success: true,

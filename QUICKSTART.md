@@ -2,24 +2,18 @@
 
 ## ⚡ 5-Minute Setup
 
-### Step 1: Create Database (2 min)
+### Step 1: Initialize Database (1 min)
 
-```powershell
-# Open SQL Server Management Studio (SSMS) or Azure Data Studio
-# File → Open → database/schema.sql
-# Press Ctrl+Shift+E to Execute
+The database uses **SQLite**, a local file-based database with zero setup!
+
+```bash
+# From the root directory:
+npm run db:init
+
+# This creates the database file at data/communication_ltd.db
 ```
 
-### Step 2: Configure Database Credentials (1 min)
-
-Edit both files and update `DB_PASSWORD`:
-
-- `communication-ltd-vulnerable/.env.local`
-- `communication-ltd-secure/.env.local`
-
-Replace `YourSqlPassword` with your actual SQL Server password.
-
-### Step 3: Start Projects (2 min)
+### Step 2: Start Projects (2 min)
 
 **Terminal 1:**
 
@@ -36,6 +30,28 @@ cd communication-ltd-secure
 npm install  # First time only
 npm run dev  # http://localhost:3001
 ```
+
+### Step 3: Verify Setup (1 min)
+
+Both applications should start without errors. You'll see:
+
+```
+✓ Database connected successfully
+```
+
+in the console for each project.
+
+---
+
+## 🔄 Resetting the Database
+
+If you need a fresh database, run:
+
+```bash
+npm run db:reset
+```
+
+This deletes the existing database and recreates it with default data.
 
 ---
 
@@ -93,10 +109,30 @@ communication-ltd-secure/           ← USE THIS FOR PRODUCTION
 └── pages/api/customers/add.ts      (Secure: HTML escaping)
 
 database/
-├── schema.sql                      (Create tables here)
-└── SETUP_INSTRUCTIONS.md          (Detailed DB setup)
+├── schema.sqlite.sql               (SQLite schema for tables)
+├── init-db.ts                      (Database initialization script)
+├── schema.sql                      (Legacy MSSQL schema - not used)
+└── SETUP_INSTRUCTIONS.md           (Detailed database guide)
+
+data/
+└── communication_ltd.db            (Your local SQLite database - created after npm run db:init)
 
 PROJECT_DOCUMENTATION.md            (Read this for details!)
+```
+
+---
+
+## 💡 About SQLite
+
+This project uses **SQLite** for local development:
+
+✅ **Zero server setup** - Just a file on your computer  
+✅ **Perfect for learning** - No installation required  
+✅ **Fast for development** - Great performance for educational use  
+✅ **Portable** - Share your `data/communication_ltd.db` file with teammates
+
+For production, consider PostgreSQL, MySQL, or a managed database service.
+
 ```
 
 ---
@@ -118,13 +154,15 @@ PROJECT_DOCUMENTATION.md            (Read this for details!)
 ### Authentication Flow
 
 ```
+
 1. Register → Create account
 2. Login → Get session
 3. Add Customer → Store data
 4. Change Password → Update password
 5. Forgot Password → Generate reset token
 6. Reset Password → Use token to change password
-```
+
+````
 
 ---
 
@@ -159,7 +197,7 @@ Complete these before submitting:
 DB_SERVER=localhost
 DB_USER=sa
 DB_PASSWORD=CorrectPassword
-```
+````
 
 ### Issue: `Port 3000 already in use`
 

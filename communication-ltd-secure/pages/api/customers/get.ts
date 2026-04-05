@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection } from "@/lib/db";
-import sql from "mssql";
 
 type ResponseData = {
   success: boolean;
@@ -36,18 +35,16 @@ export default async function handler(
 
   try {
     // SECURE: Parameterized query
-    const pool = await getConnection();
-    const request = pool.request();
+    const db = await getConnection();
 
-    request.input("user_id", sql.Int, parseInt(userId as string));
     const query = `SELECT id, first_name, last_name, phone, email, sector, subscription_package 
-                   FROM Customers WHERE user_id = @user_id`;
+                   FROM Customers WHERE user_id = ?`;
 
-    const result = await request.query(query);
+    const result = await db.all(query, [parseInt(userId as string)]);
 
     return res.status(200).json({
       success: true,
-      customers: result.recordset,
+      customers: result,
     });
   } catch (error: any) {
     console.error("Get customers error:", error);

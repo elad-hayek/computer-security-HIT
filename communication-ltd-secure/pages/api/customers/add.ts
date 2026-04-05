@@ -1,7 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection } from "@/lib/db";
-import { buildSecureCustomerQuery } from "@/lib/auth";
-import sql from "mssql";
 
 type ResponseData = {
   success: boolean;
@@ -16,7 +14,7 @@ type ResponseData = {
  * SECURITY FEATURES:
  * 1. Parameterized queries prevent SQL injection
  * 2. Input validation on all fields
- * 3. No manual escaping needed (SQL Server handles it)
+ * 3. No manual escaping needed (SQLite handles it)
  * 4. When displayed, React auto-escapes HTML (prevents XSS)
  */
 export default async function handler(
@@ -72,24 +70,24 @@ export default async function handler(
   try {
     // SECURE: Use parameterized query
     // All user inputs are passed as parameters
-    // SQL Server treats them as data, not code
-    const query = buildSecureCustomerQuery();
+    // SQLite treats them as data, not code
+    const query = `INSERT INTO Customers (user_id, first_name, last_name, phone, email, sector, subscription_package, created_date) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`;
 
-    const pool = await getConnection();
-    const request = pool.request();
+    const db = await getConnection();
 
-    // SECURE: Add parameters separately
+    // SECURE: Execute query with parameters
     // WHY: Even if firstName = "<img src=x onerror='alert(1)'>", it's stored as literal text
-    // No HTML tags are interpreted by SQL Server
-    request.input("user_id", sql.Int, userId);
-    request.input("first_name", sql.NVarChar, firstName);
-    request.input("last_name", sql.NVarChar, lastName);
-    request.input("phone", sql.NVarChar, phone);
-    request.input("email", sql.NVarChar, email);
-    request.input("sector", sql.NVarChar, sector);
-    request.input("subscription_package", sql.NVarChar, subscriptionPackage);
-
-    const result = await request.query(query);
+    // No HTML tags are interpreted by SQLite
+    await db.run(query, [
+      userId,
+      firstName,
+      lastName,
+      phone,
+      email,
+      sector,
+      subscriptionPackage,
+    ]);
 
     return res.status(201).json({
       success: true,

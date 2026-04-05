@@ -99,8 +99,8 @@ export function validatePasswordPolicy(
 /**
  * SECURE: Build parameterized login query
  * WHY THIS IS SECURE:
- * - Uses parameter placeholders (@username, @password_hash)
- * - SQL Server separates query structure from data
+ * - Uses ? placeholders (NOT string concatenation)
+ * - SQL Lite separates query structure from data
  * - Any SQL metacharacters in username are treated as literal data
  * - Completely prevents SQL Injection
  *
@@ -108,18 +108,23 @@ export function validatePasswordPolicy(
  * - If username = "admin' OR '1'='1"
  * - Query still looks for exact username = "admin' OR '1'='1"
  * - No SQL injection possible
+ *
+ * NOTE: This function is kept for documentation but not used anymore
+ * The query is built directly in the API endpoints now
  */
 export function buildSecureLoginQuery(): string {
-  return `SELECT * FROM Users WHERE username = @username AND password_hash = @password_hash`;
+  return `SELECT * FROM Users WHERE username = ? AND password_hash = ?`;
 }
 
 /**
  * SECURE: Build parameterized register query
  * Parameters passed separately to prevent SQL Injection
+ *
+ * NOTE: This function is kept for documentation but not used anymore
  */
 export function buildSecureRegisterQuery(): string {
   return `INSERT INTO Users (username, email, password_hash, salt, created_date) 
-           VALUES (@username, @email, @password_hash, @salt, GETDATE())`;
+           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`;
 }
 
 /**
@@ -129,28 +134,12 @@ export function buildSecureRegisterQuery(): string {
  * - No XSS on stored data (even if someone tries to inject HTML)
  * - Data is stored as literal text, not as executable code
  * - When displayed, React automatically escapes HTML characters
+ *
+ * NOTE: This function is kept for documentation but not used anymore
  */
 export function buildSecureCustomerQuery(): string {
   return `INSERT INTO Customers (user_id, first_name, last_name, phone, email, sector, subscription_package, created_date) 
-          VALUES (@user_id, @first_name, @last_name, @phone, @email, @sector, @subscription_package, GETDATE())`;
-}
-
-/**
- * Generate SHA-1 token hash for "Forgot Password" flow
- * WHY SHA-1 HERE:
- * - Token hash is not stored directly (only the hash)
- * - If database is breached, attacker gets hash, not the actual token
- * - User has the actual token in their email, making it valid
- * - This is OK for temporary tokens (different from password hashing)
- * - For passwords, use bcryptjs; for temporary tokens, SHA-1 is acceptable
- */
-export function generatePasswordResetToken(): {
-  token: string;
-  tokenHash: string;
-} {
-  const token = crypto.randomBytes(32).toString("hex");
-  const tokenHash = crypto.createHash("sha1").update(token).digest("hex");
-  return { token, tokenHash };
+          VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`;
 }
 
 export default {

@@ -94,6 +94,10 @@ export function validatePasswordPolicy(
  * Build vulnerable SQL queries with string concatenation
  * VULNERABLE: SQL Injection attacks possible
  */
+/**
+ * Build vulnerable SQL queries with string concatenation
+ * VULNERABLE: SQL Injection attacks possible
+ */
 export function buildVulnerableLoginQuery(
   username: string,
   password: string,
@@ -111,7 +115,7 @@ export function buildVulnerableRegisterQuery(
 ): string {
   // VULNERABLE: Direct string concatenation
   // Attack example: username = "' OR '1'='1'; DROP TABLE Users; --"
-  return `INSERT INTO Users (username, email, password_hash, salt, created_date) VALUES ('${username}', '${email}', '${passwordHash}', '${salt}', GETDATE())`;
+  return `INSERT INTO Users (username, email, password_hash, salt, created_date) VALUES ('${username}', '${email}', '${passwordHash}', '${salt}', CURRENT_TIMESTAMP)`;
 }
 
 export function buildVulnerableCustomerQuery(
@@ -125,7 +129,7 @@ export function buildVulnerableCustomerQuery(
 ): string {
   // VULNERABLE: Direct string concatenation with user input
   // XSS risk when data is retrieved: firstName = "<img src=x onerror='alert(1)'>"
-  return `INSERT INTO Customers (user_id, first_name, last_name, phone, email, sector, subscription_package, created_date) VALUES (${userId}, '${firstName}', '${lastName}', '${phone}', '${email}', '${sector}', '${package}', GETDATE())`;
+  return `INSERT INTO Customers (user_id, first_name, last_name, phone, email, sector, subscription_package, created_date) VALUES (${userId}, '${firstName}', '${lastName}', '${phone}', '${email}', '${sector}', '${package}', CURRENT_TIMESTAMP)`;
 }
 
 export default {

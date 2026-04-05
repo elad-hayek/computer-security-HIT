@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection } from "@/lib/db";
-import { buildVulnerableCustomerQuery } from "@/lib/auth";
 
 type ResponseData = {
   success: boolean;
@@ -80,22 +79,14 @@ export default async function handler(
     // XSS EXAMPLE:
     // firstName = "<img src=x onerror='alert(\"XSS\")'>"
     // Stored in database, executes when displayed!
-    const query = buildVulnerableCustomerQuery(
-      userId,
-      firstName,
-      lastName,
-      phone,
-      email,
-      sector,
-      subscriptionPackage,
-    );
+    const query = `INSERT INTO Customers (user_id, first_name, last_name, phone, email, sector, subscription_package, created_date) VALUES (${userId}, '${firstName}', '${lastName}', '${phone}', '${email}', '${sector}', '${subscriptionPackage}', CURRENT_TIMESTAMP)`;
 
     console.log("[DEBUG - VULNERABLE] Executing query:", query);
 
-    const pool = await getConnection();
+    const db = await getConnection();
 
     // VULNERABLE: Direct query execution with concatenation
-    const result = await pool.request().query(query);
+    await db.run(query);
 
     return res.status(201).json({
       success: true,

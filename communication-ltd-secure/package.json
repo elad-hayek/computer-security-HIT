@@ -6,13 +6,15 @@
     "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:init": "ts-node ../database/init-db.ts",
+    "db:reset": "rm -f data/communication_ltd.db && npm run db:init"
   },
   "dependencies": {
     "react": "^18",
     "react-dom": "^18",
     "next": "^15",
-    "mssql": "^12.0.0",
+    "sqlite": "^5.0.0",
     "bcryptjs": "^2.4.3",
     "html-escaper": "^3.0.0"
   },
@@ -20,6 +22,7 @@
     "typescript": "^5",
     "@types/node": "^20",
     "@types/react": "^18",
-    "@types/react-dom": "^18"
+    "@types/react-dom": "^18",
+    "ts-node": "^10.9.0"
   }
 }

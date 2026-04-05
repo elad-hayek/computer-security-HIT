@@ -1,11 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection } from "@/lib/db";
-import {
-  hashPasswordVulnerable,
-  buildVulnerableLoginQuery,
-  comparePasswordsVulnerable,
-} from "@/lib/auth";
-import sql from "mssql";
+import { hashPasswordVulnerable, comparePasswordsVulnerable } from "@/lib/auth";
 
 type ResponseData = {
   success: boolean;
@@ -59,24 +54,23 @@ export default async function handler(
   }
 
   try {
-    // VULNERABLE: Plain text password (from registration)
+    // VULNERABLE: Plain text password (from vulnerable registration)
     const passwordHash = hashPasswordVulnerable(password, "");
 
     // VULNERABLE: Build query with string concatenation
     // This allows SQL injection!
     // Attack: username = "admin' OR '1'='1' --"
     // Result: SELECT * FROM Users WHERE username = 'admin' OR '1'='1' --' AND password_hash = '...'
-    const query = buildVulnerableLoginQuery(username, passwordHash);
+    const query = `SELECT * FROM Users WHERE username = '${username}' AND password_hash = '${passwordHash}'`;
 
     console.log("[DEBUG - VULNERABLE] Executing query:", query);
-    console.log("[WARNING] Next to query:", query);
 
-    const pool = await getConnection();
+    const db = await getConnection();
 
     // VULNERABLE: Direct string query with concatenation
-    const result = await pool.request().query(query);
+    const result = await db.all(query);
 
-    if (result.recordset.length === 0) {
+    if (result.length === 0) {
       // VULNERABLE: Doesn't check if attack was successful
       // Attacker using "admin' --" might get admin account
       return res.status(401).json({
@@ -87,7 +81,7 @@ export default async function handler(
       });
     }
 
-    const user = result.recordset[0];
+    const user = result[0];
 
     // VULNERABLE: No rate limiting on failed attempts
     // Account not locked after multiple failed logins

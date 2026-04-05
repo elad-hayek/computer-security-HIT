@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection } from "@/lib/db";
 import { validatePasswordPolicy, hashPasswordVulnerable } from "@/lib/auth";
+import crypto from "crypto";
 
 type ResponseData = {
   success: boolean;
@@ -56,22 +57,21 @@ export default async function handler(
 
   try {
     // Hash token to find it
-    const crypto = require("crypto");
     const tokenHash = crypto.createHash("sha1").update(token).digest("hex");
 
-    const pool = await getConnection();
+    const db = await getConnection();
 
     // VULNERABLE: Direct string concatenation
     const tokenQuery = `SELECT user_id, expiry_date, used FROM PasswordResetTokens WHERE token_hash = '${tokenHash}'`;
-    const tokenResult = await pool.request().query(tokenQuery);
+    const tokenResult = await db.all(tokenQuery);
 
-    if (tokenResult.recordset.length === 0 || tokenResult.recordset[0].used) {
+    if (tokenResult.length === 0 || tokenResult[0].used) {
       return res
         .status(400)
         .json({ success: false, message: "Invalid or expired token" });
     }
 
-    const tokenData = tokenResult.recordset[0];
+    const tokenData = tokenResult[0];
 
     if (new Date(tokenData.expiry_date) < new Date()) {
       return res
@@ -83,11 +83,11 @@ export default async function handler(
 
     // VULNERABLE: Direct string concatenation
     const updateQuery = `UPDATE Users SET password_hash = '${newHash}' WHERE id = ${tokenData.user_id}`;
-    await pool.request().query(updateQuery);
+    await db.run(updateQuery);
 
     // Mark token as used - VULNERABLE
     const markUsedQuery = `UPDATE PasswordResetTokens SET used = 1 WHERE token_hash = '${tokenHash}'`;
-    await pool.request().query(markUsedQuery);
+    await db.run(markUsedQuery);
 
     return res.status(200).json({
       success: true,

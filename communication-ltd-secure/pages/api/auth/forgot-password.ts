@@ -1,7 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection } from "@/lib/db";
 import crypto from "crypto";
-import sql from "mssql";
 
 type ResponseData = {
   success: boolean;
@@ -36,24 +35,20 @@ export default async function handler(
   }
 
   try {
-    const pool = await getConnection();
-    const request = pool.request();
+    const db = await getConnection();
 
     // SECURE: Parameterized query
-    request.input("email", sql.NVarChar, email);
-    const userQuery = `SELECT id, email, username FROM Users WHERE email = @email`;
-    const result = await request.query(userQuery);
+    const userQuery = `SELECT id, email, username FROM Users WHERE email = ?`;
+    const user = await db.get(userQuery, [email]);
 
     // SECURE: Generic response (doesn't leak whether email exists)
-    if (result.recordset.length === 0) {
+    if (!user) {
       return res.status(200).json({
         success: true,
         message:
           "If an account exists with this email, a reset link will be sent",
       });
     }
-
-    const user = result.recordset[0];
 
     // SECURE: Generate cryptographically secure token
     const token = crypto.randomBytes(32).toString("hex");
@@ -63,15 +58,10 @@ export default async function handler(
     const expiry = new Date(Date.now() + 60 * 60 * 1000);
 
     // SECURE: Parameterized insert query
-    const insertRequest = pool.request();
-    insertRequest.input("user_id", sql.Int, user.id);
-    insertRequest.input("token_hash", sql.NVarChar, tokenHash);
-    insertRequest.input("expiry_date", sql.DateTime, expiry);
-
     const insertQuery = `INSERT INTO PasswordResetTokens (user_id, token_hash, expiry_date, used) 
-                         VALUES (@user_id, @token_hash, @expiry_date, 0)`;
+                         VALUES (?, ?, ?, 0)`;
 
-    await insertRequest.query(insertQuery);
+    await db.run(insertQuery, [user.id, tokenHash, expiry.toISOString()]);
 
     // In real application, would send email with reset link
     // Email would contain: visit ${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${token}

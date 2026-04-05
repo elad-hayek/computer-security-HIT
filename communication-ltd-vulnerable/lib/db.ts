@@ -1,50 +1,38 @@
-import sql from "mssql";
+import Database from "sqlite";
 
 // VULNERABLE VERSION - Direct string concatenation (for demonstration)
 // This module shows VULNERABLE practices for educational purposes
 
-const config = {
-  server: process.env.DB_SERVER || "localhost",
-  database: process.env.DB_DATABASE || "Communication_LTD",
-  user: process.env.DB_USER || "sa",
-  password: process.env.DB_PASSWORD || "",
-  port: parseInt(process.env.DB_PORT || "1433"),
-  connectionTimeout: 30000,
-  requestTimeout: 30000,
-  options: {
-    encrypt: true,
-    trustServerCertificate: true,
-  },
-};
+const DB_PATH = process.env.DB_PATH || "./data/communication_ltd.db";
 
-let pool: sql.ConnectionPool | null = null;
+let db: Database.Database | null = null;
 
 /**
- * Get or create database connection pool
- * WHY THIS MATTERS: Connection pooling reuses connections instead of creating new ones
- * This improves performance and resource management
+ * Get or create database connection
+ * WHY THIS MATTERS: Maintains a single connection to SQLite database
  */
-export async function getConnection(): Promise<sql.ConnectionPool> {
-  if (!pool) {
+export async function getConnection(): Promise<Database.Database> {
+  if (!db) {
     try {
-      pool = new sql.ConnectionPool(config);
-      await pool.connect();
+      db = await Database.open(DB_PATH);
+      // Enable foreign keys in SQLite (off by default)
+      await db.run("PRAGMA foreign_keys = ON");
       console.log("✓ Database connected successfully");
     } catch (error) {
       console.error("✗ Database connection failed:", error);
       throw error;
     }
   }
-  return pool;
+  return db;
 }
 
 /**
  * Close database connection (for cleanup)
  */
 export async function closeConnection(): Promise<void> {
-  if (pool) {
-    await pool.close();
-    pool = null;
+  if (db) {
+    await db.close();
+    db = null;
   }
 }
 
@@ -54,8 +42,8 @@ export async function closeConnection(): Promise<void> {
 export async function testConnection(): Promise<boolean> {
   try {
     const conn = await getConnection();
-    const result = await conn.request().query("SELECT 1 as test");
-    console.log("✓ Database test query successful: ", result.recordset);
+    const result = await conn.get("SELECT 1 as test");
+    console.log("✓ Database test query successful: ", result);
     return true;
   } catch (error) {
     console.error("✗ Database test query failed:", error);
@@ -72,12 +60,18 @@ export async function testConnection(): Promise<boolean> {
  * - An attacker can inject SQL code:
  *   Example: username = "admin' OR '1'='1"
  *   Results in: SELECT * FROM Users WHERE username = 'admin' OR '1'='1'
+ *   Which will return ALL users instead of finding one user
+ *
+ * EDUCATIONAL PURPOSES ONLY - Do NOT use this pattern in production!
+ * See the secure version (communication-ltd-secure/lib/db.ts) for proper parameterized queries
  */
 export async function queryVulnerable(query: string): Promise<any> {
   try {
     const conn = await getConnection();
-    const result = await conn.request().query(query);
-    return result.recordset;
+    // VULNERABLE: Direct SQL execution without parameterization
+    // The query string is executed as-is without escaping or validation
+    const result = await conn.all(query);
+    return result;
   } catch (error) {
     console.error("Query error:", error);
     throw error;

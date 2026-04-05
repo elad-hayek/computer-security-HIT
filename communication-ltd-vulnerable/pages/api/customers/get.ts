@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection } from "@/lib/db";
-import sql from "mssql";
 
 type ResponseData = {
   success: boolean;
@@ -39,12 +38,12 @@ export default async function handler(
     // VULNERABLE: Direct string concatenation
     const query = `SELECT id, first_name, last_name, phone, email, sector, subscription_package FROM Customers WHERE user_id = ${userId}`;
 
-    const pool = await getConnection();
-    const result = await pool.request().query(query);
+    const db = await getConnection();
+    const result = await db.all(query);
 
     return res.status(200).json({
       success: true,
-      customers: result.recordset,
+      customers: result,
       xss_warning:
         "[VULNERABLE] If customer first_name contains <img src=x onerror=alert(1)>, it will execute in the frontend!",
     });

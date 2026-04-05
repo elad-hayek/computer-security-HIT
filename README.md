@@ -31,30 +31,23 @@ This project demonstrates **secure vs. vulnerable** web development for a teleco
 ## 📚 Documentation
 
 - **[PROJECT_DOCUMENTATION.md](./PROJECT_DOCUMENTATION.md)** – Comprehensive guide (read this first!)
-- **[database/SETUP_INSTRUCTIONS.md](./database/SETUP_INSTRUCTIONS.md)** – Database setup guide
-- **[database/schema.sql](./database/schema.sql)** – SQL Server schema
+- **[QUICKSTART.md](./QUICKSTART.md)** – 5-minute setup with SQLite
+- **[database/SETUP_INSTRUCTIONS.md](./database/SETUP_INSTRUCTIONS.md)** – Detailed database guide
+- **[database/schema.sqlite.sql](./database/schema.sqlite.sql)** – SQLite database schema
 
 ---
 
 ## 🚀 Setup (5 minutes)
 
-### 1. Create Database
+### 1. Initialize Database
 
 ```bash
-# In SQL Server Management Studio or Azure Data Studio:
-# File → Open → database/schema.sql
-# Execute the script
+# Navigate to project root
+npm run db:init
+# Creates SQLite database at data/communication_ltd.db
 ```
 
-### 2. Update Environment Variables
-
-Edit both `.env.local` files and update:
-
-```env
-DB_PASSWORD=YourActualSQLPassword  # Change this!
-```
-
-### 3. Install & Run
+### 2. Install & Run
 
 ```bash
 # Terminal 1 - Vulnerable Version
@@ -67,6 +60,8 @@ cd communication-ltd-secure
 npm install
 npm run dev  # http://localhost:3001
 ```
+
+**That's it!** No database server setup needed. SQLite runs locally.
 
 ---
 

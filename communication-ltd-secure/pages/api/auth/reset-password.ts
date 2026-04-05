@@ -1,7 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection } from "@/lib/db";
 import { validatePasswordPolicy, hashPasswordSecure } from "@/lib/auth";
-import sql from "mssql";
 import crypto from "crypto";
 
 type ResponseData = {
@@ -67,22 +66,18 @@ export default async function handler(
     // SECURE: Hash token to find it (don't store plain tokens)
     const tokenHash = crypto.createHash("sha1").update(token).digest("hex");
 
-    const pool = await getConnection();
-    const request = pool.request();
+    const db = await getConnection();
 
     // SECURE: Parameterized query
-    request.input("token_hash", sql.NVarChar, tokenHash);
     const tokenQuery = `SELECT user_id, expiry_date, used FROM PasswordResetTokens 
-                        WHERE token_hash = @token_hash`;
-    const tokenResult = await request.query(tokenQuery);
+                        WHERE token_hash = ?`;
+    const tokenData = await db.get(tokenQuery, [tokenHash]);
 
-    if (tokenResult.recordset.length === 0 || tokenResult.recordset[0].used) {
+    if (!tokenData || tokenData.used) {
       return res
         .status(400)
         .json({ success: false, message: "Invalid or expired token" });
     }
-
-    const tokenData = tokenResult.recordset[0];
 
     if (new Date(tokenData.expiry_date) < new Date()) {
       return res
@@ -94,23 +89,16 @@ export default async function handler(
     const newHash = await hashPasswordSecure(newPassword);
 
     // SECURE: Parameterized update query
-    const updateRequest = pool.request();
-    updateRequest.input("user_id", sql.Int, tokenData.user_id);
-    updateRequest.input("password_hash", sql.NVarChar, newHash);
-
     const updateQuery = `UPDATE Users 
-                         SET password_hash = @password_hash, password_changed_date = GETDATE() 
-                         WHERE id = @user_id`;
+                         SET password_hash = ?, password_changed_date = CURRENT_TIMESTAMP 
+                         WHERE id = ?`;
 
-    await updateRequest.query(updateQuery);
+    await db.run(updateQuery, [newHash, tokenData.user_id]);
 
     // Mark token as used - SECURE
-    const markRequest = pool.request();
-    markRequest.input("token_hash", sql.NVarChar, tokenHash);
+    const markUsedQuery = `UPDATE PasswordResetTokens SET used = 1 WHERE token_hash = ?`;
 
-    const markUsedQuery = `UPDATE PasswordResetTokens SET used = 1 WHERE token_hash = @token_hash`;
-
-    await markRequest.query(markUsedQuery);
+    await db.run(markUsedQuery, [tokenHash]);
 
     return res.status(200).json({
       success: true,

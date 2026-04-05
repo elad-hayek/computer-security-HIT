@@ -1,7 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection } from "@/lib/db";
-import { comparePasswordsSecure, buildSecureLoginQuery } from "@/lib/auth";
-import sql from "mssql";
+import { comparePasswordsSecure } from "@/lib/auth";
 
 type ResponseData = {
   success: boolean;
@@ -40,24 +39,15 @@ export default async function handler(
 
   try {
     // SECURE: Use parameterized query
-    // WHY: SQL Server treats @username as data, not code
+    // WHY: SQLite treats ? as data placeholder, not code
     // Even "admin' OR '1'='1' --" is just a literal string to match
-    const query = buildSecureLoginQuery();
+    const db = await getConnection();
 
-    const pool = await getConnection();
-    const request = pool.request();
+    // SECURE: First query - find user by username only (parameterized)
+    const userQuery = `SELECT id, username, email, password_hash, login_attempts, locked_until FROM Users WHERE username = ?`;
+    const userResult = await db.get(userQuery, [username]);
 
-    // SECURE: Parameters passed separately
-    request.input("username", sql.NVarChar, username);
-    request.input("password_hash", sql.NVarChar, ""); // Will use real hash from DB
-
-    // SECURE: First query - find user by username only
-    const userQuery = `SELECT id, username, email, password_hash, login_attempts, locked_until FROM Users WHERE username = @username`;
-    const userRequest = pool.request();
-    userRequest.input("username", sql.NVarChar, username);
-    const userResult = await userRequest.query(userQuery);
-
-    if (userResult.recordset.length === 0) {
+    if (!userResult) {
       // SECURE: Generic error message (no username enumeration)
       return res.status(401).json({
         success: false,
@@ -65,7 +55,7 @@ export default async function handler(
       });
     }
 
-    const user = userResult.recordset[0];
+    const user = userResult;
 
     // SECURE: Check if account is locked
     const maxAttempts = parseInt(process.env.CONFIG_MAX_LOGIN_ATTEMPTS || "3");
@@ -92,12 +82,9 @@ export default async function handler(
         lockedUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
       }
 
-      // Update failed attempts
-      const updateQuery = `UPDATE Users SET login_attempts = @attempts, locked_until = @locked_until WHERE id = @id`;
-      const updateRequest = pool.request();
-      updateRequest.input("attempts", sql.Int, newAttempts);
-      updateRequest.input("locked_until", sql.DateTime, lockedUntil);
-      updateRequest.input("id", sql.Int, user.id);
+      // Update failed attempts (parameterized)
+      const updateQuery = `UPDATE Users SET login_attempts = ?, locked_until = ? WHERE id = ?`;
+      await db.run(updateQuery, [newAttempts, lockedUntil, user.id]);
       await updateRequest.query(updateQuery);
 
       // SECURE: Generic error message

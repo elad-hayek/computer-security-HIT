@@ -1,50 +1,39 @@
-import sql from "mssql";
+import Database from "sqlite";
 
-// SECURE VERSION - Parameterized queries and proper error handling
+// SECURE VERSION - Parameterized queries with SQLite
 // This module shows SECURE practices for production use
 
-const config = {
-  server: process.env.DB_SERVER || "localhost",
-  database: process.env.DB_DATABASE || "Communication_LTD",
-  user: process.env.DB_USER || "sa",
-  password: process.env.DB_PASSWORD || "",
-  port: parseInt(process.env.DB_PORT || "1433"),
-  connectionTimeout: 30000,
-  requestTimeout: 30000,
-  options: {
-    encrypt: true,
-    trustServerCertificate: true,
-  },
-};
+const DB_PATH = process.env.DB_PATH || "./data/communication_ltd.db";
 
-let pool: sql.ConnectionPool | null = null;
+let db: Database.Database | null = null;
 
 /**
- * Get or create database connection pool
- * WHY THIS MATTERS: Connection pooling reuses connections instead of creating new ones
- * This improves performance and resource management
+ * Get or create database connection
+ * WHY THIS MATTERS: Maintains a single connection to SQLite database
+ * SQLite works better with a single persistent connection than connection pooling
  */
-export async function getConnection(): Promise<sql.ConnectionPool> {
-  if (!pool) {
+export async function getConnection(): Promise<Database.Database> {
+  if (!db) {
     try {
-      pool = new sql.ConnectionPool(config);
-      await pool.connect();
+      db = await Database.open(DB_PATH);
+      // Enable foreign keys in SQLite (off by default)
+      await db.run("PRAGMA foreign_keys = ON");
       console.log("✓ Secure database connected successfully");
     } catch (error) {
       console.error("✗ Database connection failed:", error);
       throw error;
     }
   }
-  return pool;
+  return db;
 }
 
 /**
  * Close database connection (for cleanup)
  */
 export async function closeConnection(): Promise<void> {
-  if (pool) {
-    await pool.close();
-    pool = null;
+  if (db) {
+    await db.close();
+    db = null;
   }
 }
 
@@ -54,8 +43,8 @@ export async function closeConnection(): Promise<void> {
 export async function testConnection(): Promise<boolean> {
   try {
     const conn = await getConnection();
-    const result = await conn.request().query("SELECT 1 as test");
-    console.log("✓ Secure database test query successful: ", result.recordset);
+    const result = await conn.get("SELECT 1 as test");
+    console.log("✓ Secure database test query successful: ", result);
     return true;
   } catch (error) {
     console.error("✗ Database test query failed:", error);
@@ -64,50 +53,139 @@ export async function testConnection(): Promise<boolean> {
 }
 
 /**
- * SECURE: Execute query with parameterized queries
- * WHY THIS IS SECURE:
- * - Parameters are passed separately from the SQL query
- * - SQL Server treats them as data, not executable code
- * - Example: SELECT * FROM Users WHERE username = @username
- *   The @username parameter is treated as literal data, no matter what it contains
- * - This completely prevents SQL Injection attacks
+ * Type for query parameters in SQLite
+ * SQLite accepts arrays for ? placeholders or objects for named parameters
+ */
+type QueryParams = (string | number | boolean | null)[] | Record<string, any>;
+
+/**
+ * SECURE: Execute a query with PARAMETERIZED values
+ *
+ * ⚠️ CRITICAL SECURITY CHECK:
+ * This function prevents SQL INJECTION by:
+ * 1. Using ? placeholders (NOT string concatenation)
+ * 2. Passing parameters separately (NOT building SQL strings)
+ * 3. SQLite automatically escapes and validates parameters
+ *
+ * VULNERABLE CODE EXAMPLE (DON'T DO THIS):
+ * ❌ `SELECT * FROM Users WHERE username = '${username}'`
+ * ✅ `SELECT * FROM Users WHERE username = ?` + [username]
  *
  * USAGE PATTERN:
  * const result = await querySecure(
- *   'SELECT * FROM Users WHERE username = @username',
- *   { username: 'john' }
+ *   'SELECT * FROM Users WHERE username = ?',
+ *   ['john']
  * );
  */
 export async function querySecure(
   queryString: string,
-  parameters?: Record<string, any>,
+  parameters?: QueryParams,
 ): Promise<any> {
   try {
     const conn = await getConnection();
-    const request = conn.request();
 
-    // Add parameters to the query
-    if (parameters) {
-      for (const [key, value] of Object.entries(parameters)) {
-        // sql.NVarChar for strings, sql.Int for numbers, etc.
-        if (typeof value === "string") {
-          request.input(key, sql.NVarChar, value);
-        } else if (typeof value === "number") {
-          request.input(key, sql.Int, value);
-        } else if (typeof value === "boolean") {
-          request.input(key, sql.Bit, value);
-        } else if (value instanceof Date) {
-          request.input(key, sql.DateTime, value);
-        } else {
-          request.input(key, sql.NVarChar, JSON.stringify(value));
-        }
-      }
+    // Validate that parameters use ? placeholders (SECURE pattern)
+    // This helps catch vulnerable code during development
+    const placeholderCount = (queryString.match(/\?/g) || []).length;
+    const paramCount = Array.isArray(parameters)
+      ? parameters.length
+      : Object.keys(parameters || {}).length;
+
+    if (placeholderCount !== paramCount) {
+      throw new Error(
+        `Parameter mismatch: Query has ${placeholderCount} placeholders but ${paramCount} parameters provided`,
+      );
     }
 
-    const result = await request.query(queryString);
-    return result.recordset;
+    // Execute query with parameters
+    // SQLite automatically handles:
+    // - String escaping (no SQL injection possible)
+    // - Type binding (integers, strings, dates, etc.)
+    // - NULL handling
+    const result = await conn.all(queryString, parameters || []);
+    return result;
   } catch (error) {
     console.error("Query error:", error);
+    throw error;
+  }
+}
+
+/**
+ * SECURE: Execute a single row query (returns first result or null)
+ *
+ * USAGE PATTERN:
+ * const user = await querySingleSecure(
+ *   'SELECT * FROM Users WHERE id = ?',
+ *   [userId]
+ * );
+ */
+export async function querySingleSecure(
+  queryString: string,
+  parameters?: QueryParams,
+): Promise<any> {
+  try {
+    const conn = await getConnection();
+    const result = await conn.get(queryString, parameters || []);
+    return result || null;
+  } catch (error) {
+    console.error("Query error:", error);
+    throw error;
+  }
+}
+
+/**
+ * SECURE: Execute INSERT/UPDATE/DELETE (does not return rows)
+ * Returns the result object with lastID and changes
+ *
+ * USAGE PATTERN:
+ * const result = await executeSecure(
+ *   'INSERT INTO Users (username, email, password_hash, salt) VALUES (?, ?, ?, ?)',
+ *   ['john', 'john@example.com', 'hashed_password', 'salt123']
+ * );
+ * console.log(result.lastID); // ID of inserted row
+ */
+export async function executeSecure(
+  queryString: string,
+  parameters?: QueryParams,
+): Promise<{ lastID?: number; changes?: number }> {
+  try {
+    const conn = await getConnection();
+    const result = await conn.run(queryString, parameters || []);
+    return { lastID: result.lastID, changes: result.changes };
+  } catch (error) {
+    console.error("Execution error:", error);
+    throw error;
+  }
+}
+
+/**
+ * SECURE: Execute multiple queries in a transaction
+ * If any query fails, all are rolled back
+ *
+ * WHY THIS MATTERS: Transactions ensure data consistency
+ *
+ * USAGE PATTERN:
+ * await transactionSecure(async (tx) => {
+ *   await tx.run('INSERT INTO Users ...', params);
+ *   await tx.run('INSERT INTO Customers ...', params);
+ * });
+ */
+export async function transactionSecure(
+  callback: (tx: Database.Database) => Promise<void>,
+): Promise<void> {
+  try {
+    const conn = await getConnection();
+    await conn.run("BEGIN TRANSACTION");
+
+    try {
+      await callback(conn);
+      await conn.run("COMMIT");
+    } catch (error) {
+      await conn.run("ROLLBACK");
+      throw error;
+    }
+  } catch (error) {
+    console.error("Transaction error:", error);
     throw error;
   }
 }

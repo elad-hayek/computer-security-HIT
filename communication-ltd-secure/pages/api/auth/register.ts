@@ -5,9 +5,7 @@ import {
   hashPasswordSecure,
   comparePasswordsSecure,
   generateSalt,
-  buildSecureRegisterQuery,
 } from "@/lib/auth";
-import sql from "mssql";
 
 type ResponseData = {
   success: boolean;
@@ -84,20 +82,24 @@ export default async function handler(
     const passwordHash = await hashPasswordSecure(password);
     const salt = generateSalt(); // Not strictly needed with bcryptjs, but keeping for schema
 
-    // SECURE: Build parameterized query
-    const query = buildSecureRegisterQuery();
+    // SECURE: Use parameterized query
+    const query = `INSERT INTO Users (username, email, password_hash, salt, created_date) 
+                   VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`;
 
-    const pool = await getConnection();
-    const request = pool.request();
+    const db = await getConnection();
 
-    // SECURE: Add parameters separately
-    // WHY: SQL Server treats these as data, not executable code
-    // Even if username = "'); DROP TABLE Users; --", it's just a literal string
-    request.input("username", sql.NVarChar, username);
-    request.input("email", sql.NVarChar, email);
-    request.input("password_hash", sql.NVarChar, passwordHash);
-    request.input("salt", sql.NVarChar, salt);
+    // SECURE: Execute query with parameters
+    // SQLite treats ? as placeholder, parameters are passed separately
+    await db.run(query, [username, email, passwordHash, salt]);
 
+    return res.status(201).json({
+      success: true,
+      message: `User '${username}' registered successfully (SECURE VERSION)`,
+    });
+  } catch (error: any) {
+    console.error("Registration error:", error);
+
+    // Check if it's a duplicate username/email error
     await request.query(query);
 
     return res.status(201).json({

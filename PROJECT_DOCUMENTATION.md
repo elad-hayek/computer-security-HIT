@@ -7,7 +7,7 @@ This project demonstrates secure vs. vulnerable web application development for 
 1. **communication-ltd-vulnerable** (Port 3000) - Demonstrates common web vulnerabilities
 2. **communication-ltd-secure** (Port 3001) - Demonstrates security best practices
 
-Both applications connect to a local SQL Server database and implement the same business logic, but with different security approaches.
+Both applications connect to a local **SQLite** database file and implement the same business logic, but with different security approaches.
 
 ---
 
@@ -337,26 +337,23 @@ return <h2>{escape(customer.first_name)}</h2>;
 // "<img src=x onerror=...>" becomes literal text displayed to user!
 ```
 
-**Option 2: Stored Procedures (Alternative)**
+**Option 2: Transactions (Alternative)**
 
-```sql
--- SQL Server Stored Procedure
-CREATE PROCEDURE sp_AddCustomer
-    @user_id INT,
-    @first_name NVARCHAR(250),
-    @last_name NVARCHAR(250),
-    -- ... other params
-AS
-BEGIN
-  INSERT INTO Customers (user_id, first_name, last_name, ...)
-  VALUES (@user_id, @first_name, @last_name, ...)
-END
+For safety-critical operations, wrap multiple queries in a transaction:
+
+```typescript
+// DO THIS for multiple related operations
+await transactionSecure(async (tx) => {
+  await tx.run("INSERT INTO Users ...", params);
+  await tx.run("INSERT INTO Customers ...", params);
+  // If any query fails, all are rolled back
+});
 ```
 
 **Why This Works:**
 
 - ✅ Parameterized queries prevent injection at database level
-- ✅ SQL Server treats input as data, never executes code
+- ✅ SQLite treats parameters as data, never executes code as SQL
 - ✅ HTML escaping converts dangerous chars:
   - `<` becomes `&lt;`
   - `>` becomes `&gt;`
@@ -629,45 +626,21 @@ Impact: Captures new credentials
 
 ### Prerequisites
 
-1. SQL Server 2019+ installed locally
-2. Node.js 18+
-3. SQL Server Management Studio (SSMS) or Azure Data Studio
+1. Node.js 18+ installed locally
+2. That's it! SQLite is included in the Node.js runtime
 
 ### Setup Steps
 
-#### Step 1: Create Database
+#### Step 1: Initialize Database
 
 ```bash
-# In SSMS or Azure Data Studio:
-# File → Open → database/schema.sql
-# Execute (Ctrl+Shift+E)
+# From project root:
+npm run db:init
+
+# Creates SQLite database at data/communication_ltd.db
 ```
 
-#### Step 2: Configure Environment Variables
-
-Both projects have `.env.local` files (already created with placeholders):
-
-**Edit: communication-ltd-vulnerable/.env.local**
-
-```env
-DB_SERVER=localhost
-DB_DATABASE=Communication_LTD
-DB_USER=sa
-DB_PASSWORD=YourActualSQLPassword  # Change this!
-DB_PORT=1433
-```
-
-**Edit: communication-ltd-secure/.env.local**
-
-```env
-DB_SERVER=localhost
-DB_DATABASE=Communication_LTD
-DB_USER=sa
-DB_PASSWORD=YourActualSQLPassword  # Change this!
-DB_PORT=1433
-```
-
-#### Step 3: Install Dependencies
+#### Step 2: Install Dependencies
 
 **Terminal 1 - Vulnerable Version:**
 
@@ -676,6 +649,23 @@ cd communication-ltd-vulnerable
 npm install
 npm run dev
 # Opens at http://localhost:3000
+```
+
+**Terminal 2 - Secure Version:**
+
+```bash
+cd communication-ltd-secure
+npm install
+npm run dev
+# Opens at http://localhost:3001
+```
+
+#### Step 3: Verify Setup
+
+Both applications should start without errors and display in the console:
+
+```
+✓ Database connected successfully
 ```
 
 **Terminal 2 - Secure Version:**
@@ -718,12 +708,8 @@ npm run dev
 Both projects need this file (automatically created, fill in DB password):
 
 ```env
-# Database Connection
-DB_SERVER=localhost              # SQL Server instance name
-DB_DATABASE=Communication_LTD    # Database name
-DB_USER=sa                       # SQL Server user (default admin)
-DB_PASSWORD=YourPassword         # YOUR SQL PASSWORD HERE
-DB_PORT=1433                     # SQL Server port (default)
+# SQLite Database Configuration
+DB_PATH=./data/communication_ltd.db  # Path to local SQLite file
 
 # Password Policy (from PasswordPolicies table)
 CONFIG_PASSWORD_MIN_LENGTH=10
@@ -741,10 +727,10 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000  (or 3001 for secure)
 
 ### Why .env.local?
 
-1. **Security:** Passwords not committed to version control
+1. **Security:** Database path and settings not committed to version control
 2. **Separation:** Development vs. production settings
 3. **Flexibility:** Easy to change without code modifications
-4. **.gitignore:** File is ignored in git (won't leak credentials)
+4. **.gitignore:** File is ignored in git (won't leak database paths or credentials)
 
 ---
 
@@ -790,12 +776,12 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000  (or 3001 for secure)
 
 ### .env.local Usage
 
-| Scenario              | Action                                              |
-| --------------------- | --------------------------------------------------- |
-| New developer joins   | Copy `.env.local` template, fill in actual password |
-| Push to GitHub        | DON'T commit `.env.local`                           |
-| Production deployment | Use environment variables on server (not files)     |
-| Database migration    | Update DB_SERVER and DB_PASSWORD only               |
+| Scenario              | Action                                          |
+| --------------------- | ----------------------------------------------- |
+| New developer joins   | `.env.local` already provided with DB_PATH      |
+| Push to GitHub        | DON'T commit `.env.local` or `data/` directory  |
+| Production deployment | Use environment variables on server (not files) |
+| Database reset        | Run `npm run db:reset` to delete and recreate   |
 
 ---
 
@@ -837,11 +823,13 @@ After completing this project, students should understand:
 
 If you encounter issues:
 
-1. **Database connection errors:** Verify SQL Server is running, check DB_PASSWORD
-2. **npm install fails:** Delete `node_modules` and `package-lock.json`, try again
-3. **Port already in use:** Kill process on port 3000/3001: `netstat -ano | findstr :3000`
-4. **API returns 500:** Check server console for error details
-5. **XSS not working:** Ensure you're visiting `/register` page and adding customer via API
+1. **Database connection errors:** Run `npm run db:init` from project root
+2. **`data/communication_ltd.db` not created:** Ensure you ran `npm run db:init` first
+3. **npm install fails:** Delete `node_modules` and `package-lock.json`, try again
+4. **Port already in use:** Kill process on port 3000/3001: `netstat -ano | findstr :3000`
+5. **API returns 500:** Check server console for error details
+6. **XSS not working:** Ensure you're visiting `/register` page and adding customer via API
+7. **Database reset needed:** Run `npm run db:reset` to delete and recreate the database
 
 ---
 

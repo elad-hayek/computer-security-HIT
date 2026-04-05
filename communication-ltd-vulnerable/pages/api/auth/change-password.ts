@@ -5,7 +5,6 @@ import {
   hashPasswordVulnerable,
   comparePasswordsVulnerable,
 } from "@/lib/auth";
-import sql from "mssql";
 
 type ResponseData = {
   success: boolean;
@@ -66,15 +65,15 @@ export default async function handler(
   }
 
   try {
-    const pool = await getConnection();
+    const db = await getConnection();
 
     // VULNERABLE: No verification of old password!
     // An attacker could change anyone's password if they know the userId
     // VULNERABLE: Direct string concatenation possible
     const query = `SELECT id FROM Users WHERE id = ${userId}`;
-    const userResult = await pool.request().query(query);
+    const userResult = await db.all(query);
 
-    if (userResult.recordset.length === 0) {
+    if (userResult.length === 0) {
       return res
         .status(404)
         .json({ success: false, message: "User not found" });
@@ -85,9 +84,9 @@ export default async function handler(
     const newHash = hashPasswordVulnerable(newPassword, "");
 
     // VULNERABLE: Direct string concatenation
-    const updateQuery = `UPDATE Users SET password_hash = '${newHash}', password_changed_date = GETDATE() WHERE id = ${userId}`;
+    const updateQuery = `UPDATE Users SET password_hash = '${newHash}', password_changed_date = CURRENT_TIMESTAMP WHERE id = ${userId}`;
 
-    await pool.request().query(updateQuery);
+    await db.run(updateQuery);
 
     return res.status(200).json({
       success: true,

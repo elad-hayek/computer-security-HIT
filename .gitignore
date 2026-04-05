@@ -1,12 +1,19 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.js
 
 # testing
 /coverage
+.nyc_output/
+*.test.js
+*.test.ts
+*.test.tsx
+*.spec.js
+*.spec.ts
+*.spec.tsx
 
 # next.js
 /.next/
@@ -14,10 +21,24 @@
 
 # production
 /build
+dist/
+.next/
+/out/
 
 # misc
 .DS_Store
 *.pem
+Thumbs.db
+
+# IDE & editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
 
 # debug
 npm-debug.log*
@@ -38,4 +59,9 @@ next-env.d.ts
 # project specific
 .env.local
 database/(*.backup|*.bak)
-/node_modules/
+
+# SQLite database files (local development only)
+data/
+*.db
+*.db-shm
+*.db-wal

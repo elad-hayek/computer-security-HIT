@@ -1,179 +1,211 @@
 # Database Setup Instructions
 
+## Overview
+
+This project uses **SQLite** for the local development database. SQLite requires zero server setup—it's a file-based database that works instantly.
+
 ## Prerequisites
 
-- SQL Server 2019 or later (Express, Developer, or full editions)
-- SQL Server Management Studio (SSMS) or Azure Data Studio
-- Local SQL instance running (default: `localhost` or `.\` for named instance)
+- Node.js 18+ installed
+- That's it! SQLite is built into the Node.js runtime.
 
-## Step 1: Create the Database
+## Step 1: Initialize the Database
 
-### Option A: Using SQL Server Management Studio (SSMS)
+From the **project root directory**, run:
 
-1. Open **SQL Server Management Studio**
-2. Connect to your local SQL Server instance
-3. Open the file: `schema.sql` (File → Open → File)
-4. Execute the script (Ctrl+Shift+E or Query → Execute)
-5. **Verify:** In Object Explorer, expand **Databases** and look for `Communication_LTD`
-
-### Option B: Using Command Line (sqlcmd)
-
-```powershell
-sqlcmd -S localhost -U sa -P "YourPassword" -i ".\schema.sql"
+```bash
+npm run db:init
 ```
 
-### Option C: Using Azure Data Studio
+This command:
 
-1. Open **Azure Data Studio**
-2. Connect to your SQL Server instance
-3. File → Open → Select `schema.sql`
-4. Execute (Ctrl+Shift+E)
+- Creates the `data/` directory
+- Generates `data/communication_ltd.db` (the SQLite database file)
+- Populates the schema with 4 tables
+- Inserts default data (PasswordPolicies and test user)
+
+**Expected Output:**
+
+```
+✓ Created directory: data
+✓ Opened database: ./data/communication_ltd.db
+✓ Loaded schema file
+✓ Database initialized successfully!
+📊 Database location: ./data/communication_ltd.db
+
+🎉 Setup complete! You can now run: npm run dev
+```
 
 ## Step 2: Verify Schema Creation
 
-In SSMS or Azure Data Studio, run:
+Inspect the database file using SQLite CLI:
 
-```sql
-USE Communication_LTD;
-GO
+```bash
+# Install sqlite3 CLI if needed (Windows):
+# https://www.sqlite.org/download.html
 
--- List all tables
-SELECT * FROM sys.tables;
-
--- Verify PasswordPolicies table has default row
-SELECT * FROM PasswordPolicies;
-
--- Check Users table structure
-EXEC sp_columns Users;
-
--- Check Customers table structure
-EXEC sp_columns Customers;
+# Or use this Node.js command to verify:
+npx sqlite3 data/communication_ltd.db ".tables"
 ```
 
 Expected Result:
 
-- 4 tables: Users, Customers, PasswordPolicies, PasswordResetTokens
-- Indexes created on key columns
-- Default password policy inserted
-
-## Step 3: Configure .env.local Files
-
-Create `.env.local` file in **both projects**:
-
-### File: `communication-ltd-vulnerable/.env.local`
-
 ```
-DB_SERVER=localhost
-DB_DATABASE=Communication_LTD
-DB_USER=sa
-DB_PASSWORD=YourSqlPassword
-DB_PORT=1433
-CONFIG_PASSWORD_MIN_LENGTH=10
-CONFIG_PASSWORD_REQUIRE_UPPERCASE=true
-CONFIG_PASSWORD_REQUIRE_LOWERCASE=true
-CONFIG_PASSWORD_REQUIRE_DIGITS=true
-CONFIG_PASSWORD_REQUIRE_SPECIAL_CHARS=true
-CONFIG_PASSWORD_HISTORY_COUNT=3
-CONFIG_MAX_LOGIN_ATTEMPTS=3
+Customers  PasswordPolicies  PasswordResetTokens  Users
 ```
 
-### File: `communication-ltd-secure/.env.local`
+To view the schema:
 
+```bash
+npx sqlite3 data/communication_ltd.db ".schema Users"
 ```
-DB_SERVER=localhost
-DB_DATABASE=Communication_LTD
-DB_USER=sa
-DB_PASSWORD=YourSqlPassword
-DB_PORT=1433
-CONFIG_PASSWORD_MIN_LENGTH=10
-CONFIG_PASSWORD_REQUIRE_UPPERCASE=true
-CONFIG_PASSWORD_REQUIRE_LOWERCASE=true
-CONFIG_PASSWORD_REQUIRE_DIGITS=true
-CONFIG_PASSWORD_REQUIRE_SPECIAL_CHARS=true
-CONFIG_PASSWORD_HISTORY_COUNT=3
-CONFIG_MAX_LOGIN_ATTEMPTS=3
+
+## Step 3: No `.env.local` Configuration Needed!
+
+The `.env.local` files are **already created** with the correct SQLite path:
+
+```env
+# .env.local
+DB_PATH=./data/communication_ltd.db
 ```
+
+You can use this as-is. No modifications needed!
 
 ## Step 4: Test Connection from Node.js
 
-Once `.env.local` is configured, test the connection:
+Once the database is initialized, test the connection:
 
-```javascript
-const sql = require("mssql");
+```bash
+npm run dev
+```
 
-const config = {
-  server: "localhost",
-  database: "Communication_LTD",
-  user: "sa",
-  password: "YourPassword",
-  port: 1433,
-  options: { encrypt: true, trustServerCertificate: true },
-};
+When each Next.js server starts, you'll see:
 
-sql.connect(config, (err) => {
-  if (err) console.log("Connection failed:", err);
-  else console.log("Connection successful!");
-});
+```
+✓ Secure database connected successfully
 ```
 
 ## Troubleshooting
 
-### Error: "Cannot connect to localhost, 1433"
+### Error: "Cannot find `data/communication_ltd.db`"
 
-- **Solution:** Verify SQL Server is running: Services → SQL Server (MSSQLSERVER)
-- **Alternative:** Use full instance name: `localhost\SQLEXPRESS` if using Express edition
+- **Solution:** Run `npm run db:init` first to create the database
+- Verify the command executed without errors
 
-### Error: "Login failed for user 'sa'"
+### Error: "Database lock / busy"
 
-- **Solution:** Verify SQL Server Authentication is enabled (not Windows-only)
-- Steps: SSMS → Properties → Server → Security → SQL Server and Windows Authentication
+- **Solution:** This rarely happens with SQLite. If it does:
+  1. Restart the Node.js server
+  2. Delete `data/*.db-wal` and `data/*.db-shm` files
 
-### Error: "Database 'Communication_LTD' does not exist"
+### Error: "SQLITE_CANTOPEN"
 
-- **Solution:** Run the schema.sql script again
-- Check that no errors occurred during execution
+- **Solution:** Ensure Node.js has write permissions to the `data/` directory
+- Check that the `data/` directory exists: `ls data/` (or `dir data/` on Windows)
 
-### Error: "Connection timeout"
+### Database file too large or corrupted
 
-- **Solution:** Allow SQL Server through Windows Firewall
-  - Or add `Encrypt=true; TrustServerCertificate=true;` to connection string
+- **Solution:** Delete and recreate:
+  ```bash
+  npm run db:reset
+  ```
 
-## Connection String Reference
+## SQLite vs SQL Server: Why SQLite?
 
-| Component         | Value                          |
-| ----------------- | ------------------------------ |
-| Server            | localhost (or 127.0.0.1)       |
-| Database          | Communication_LTD              |
-| User              | sa (SQL Server Authentication) |
-| Port              | 1433 (default)                 |
-| Encryption        | true                           |
-| Trust Certificate | true (for development)         |
+| Feature      | SQLite          | SQL Server      |
+| ------------ | --------------- | --------------- |
+| Setup Time   | < 1 second      | 30+ minutes     |
+| Portability  | Single .db file | Requires server |
+| For Learning | Perfect ✅      | Overkill        |
+| Production   | Not ideal ❌    | Enterprise ✅   |
+
+**For this educational project, SQLite is ideal!**
 
 ## Next Steps
 
-1. Ensure `.env.local` files are created in both projects
-2. Run `npm install` in both projects
-3. Run `npm run dev` to start development servers
-4. Navigate to `http://localhost:3000` (or 3001 for second project)
-5. Test the registration flow
+1. ✅ Database initialized (`npm run db:init`)
+2. Navigate to each project folder:
+   ```bash
+   cd communication-ltd-vulnerable
+   npm install
+   npm run dev
+   ```
+3. Test at `http://localhost:3000` (or 3001 for secure version)
+4. Test the registration flow
 
-## Database Backup
+## Database Inspection
 
-To backup the database (optional):
+### View all users:
 
-```sql
-BACKUP DATABASE Communication_LTD
-TO DISK = 'C:\Backups\Communication_LTD.bak';
+```bash
+npx sqlite3 data/communication_ltd.db "SELECT id, username, email FROM Users;"
+```
+
+### View all customers:
+
+```bash
+npx sqlite3 data/communication_ltd.db "SELECT * FROM Customers;"
+```
+
+### View password policies:
+
+```bash
+npx sqlite3 data/communication_ltd.db "SELECT * FROM PasswordPolicies;"
 ```
 
 ## Reset Database
 
-To reset and start fresh:
+To delete all data and start fresh:
 
-```sql
-USE master;
-GO
-DROP DATABASE Communication_LTD;
-GO
--- Then re-run schema.sql
+```bash
+npm run db:reset
 ```
+
+This will:
+
+1. Delete `data/communication_ltd.db`
+2. Run `npm run db:init` to recreate with fresh schema
+
+## Advanced: Direct SQLite Access
+
+For deeper inspection or debugging, use the `sqlite3` CLI:
+
+```bash
+# Interactive mode
+sqlite3 data/communication_ltd.db
+
+# Inside sqlite3 shell:
+.tables              -- List all tables
+.schema Users        -- View Users table structure
+SELECT * FROM Users; -- View all users
+.exit                -- Exit sqlite3
+```
+
+## Database File Locations
+
+- **Secure version:** `communication-ltd-secure/data/communication_ltd.db`
+- **Vulnerable version:** `communication-ltd-vulnerable/data/communication_ltd.db`
+
+Both versions use the **same database file**, so data is shared between them during development.
+
+## Backing Up the Database
+
+SQLite database files can be copied directly:
+
+```bash
+# Create a backup
+cp data/communication_ltd.db data/communication_ltd.backup.db
+
+# Restore from backup
+cp data/communication_ltd.backup.db data/communication_ltd.db
+```
+
+## Summary
+
+| Task                | Command                                        |
+| ------------------- | ---------------------------------------------- |
+| Initialize database | `npm run db:init`                              |
+| Reset database      | `npm run db:reset`                             |
+| Inspect with CLI    | `sqlite3 data/communication_ltd.db ".tables"`  |
+| View schema         | `sqlite3 data/communication_ltd.db ".schema" ` |
+| Backup database     | `cp data/communication_ltd.db data/backup.db`  |
