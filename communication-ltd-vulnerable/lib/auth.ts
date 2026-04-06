@@ -1,16 +1,6 @@
 // VULNERABLE VERSION - No password hashing, direct SQL concatenation
 // This file demonstrates INSECURE authentication practices for educational purposes
 
-import crypto from "crypto";
-
-/**
- * VULNERABLE: Generate salt (but won't use it for hashing in this demo)
- * Shows what NOT to do in production
- */
-export function generateSalt(): string {
-  return crypto.randomBytes(16).toString("hex");
-}
-
 /**
  * VULNERABLE: Store password as plain text
  * WARNING: This is EXTREMELY insecure!

@@ -7,15 +7,6 @@ import crypto from "crypto";
 const SALT_ROUNDS = 12; // bcryptjs salty rounds for hashing
 
 /**
- * SECURE: Generate random salt for use with bcryptjs
- * WHY: Each user gets a unique salt, preventing rainbow table attacks
- * Even if two users have the same password, their hashes will differ
- */
-export function generateSalt(): string {
-  return crypto.randomBytes(16).toString("hex");
-}
-
-/**
  * SECURE: Hash password using bcryptjs
  * WHY THIS IS SECURE:
  * - Uses bcryptjs algorithm (adaptive and slowing)
