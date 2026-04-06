@@ -1,6 +1,23 @@
 // VULNERABLE VERSION - No password hashing, direct SQL concatenation
 // This file demonstrates INSECURE authentication practices for educational purposes
 
+import crypto from "crypto";
+
+/**
+ * VULNERABLE: Generate a "salt" but it's not actually used securely
+ * Returns a random value but won't prevent attacks
+ */
+export function generateSalt(): string {
+  return crypto.randomBytes(16).toString("hex");
+}
+
+/**
+ * VULNERABLE: Generate password reset token without proper protection
+ */
+export function generatePasswordResetToken(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
+
 /**
  * VULNERABLE: Store password as plain text
  * WARNING: This is EXTREMELY insecure!
@@ -149,8 +166,68 @@ export function checkPasswordDictionary(password: string): {
 }
 
 /**
- * SECURE: Validate password hasn't been used in last N times
- * SECURITY: Prevents password reuse attacks
+ * VULNERABLE: Check password history with SQL injection risk
+ * Uses string concatenation instead of parameterized queries
+ */
+export async function checkPasswordHistory(
+  userId: number,
+  password: string,
+  db: any,
+  config: any,
+): Promise<{ valid: boolean; reason?: string }> {
+  try {
+    // VULNERABLE: String concatenation - SQL injection possible
+    // If userId is not properly validated/sanitized, attacker could craft SQL injection
+    const query = `
+      SELECT password_hash FROM PasswordHistory 
+      WHERE user_id = ${userId} 
+      ORDER BY created_date DESC 
+      LIMIT ${config.passwordHistory}
+    `;
+    const results = await db.all(query);
+
+    // Check if new password matches any of the last N passwords
+    for (const row of results) {
+      const isMatch = comparePasswordsVulnerable(password, row.password_hash);
+      if (isMatch) {
+        return {
+          valid: false,
+          reason: `Cannot reuse a password from the last ${config.passwordHistory} times.`,
+        };
+      }
+    }
+
+    return { valid: true };
+  } catch (error) {
+    console.error("Error checking password history:", error);
+    return { valid: true };
+  }
+}
+
+/**
+ * VULNERABLE: Add password to history with SQL injection
+ * Uses string concatenation for database queries
+ */
+export async function addPasswordToHistory(
+  userId: number,
+  passwordHash: string,
+  db: any,
+): Promise<void> {
+  try {
+    // VULNERABLE: String concatenation in INSERT
+    // If passwordHash contains quotes, it could break SQL syntax
+    const query = `
+      INSERT INTO PasswordHistory (user_id, password_hash, created_date)
+      VALUES (${userId}, '${passwordHash}', CURRENT_TIMESTAMP)
+    `;
+    await db.run(query);
+  } catch (error) {
+    console.error("Error adding password to history:", error);
+  }
+}
+
+/**
+ * VULNERABLE: Legacy validation using JSON approach with SQL injection
  */
 export async function validatePasswordHistory(
   userId: number,
@@ -161,8 +238,9 @@ export async function validatePasswordHistory(
     const { getPasswordConfig } = require("./passwordConfig");
     const config = getPasswordConfig();
 
-    const userQuery = `SELECT password_history FROM Users WHERE id = ?`;
-    const result = await db.get(userQuery, [userId]);
+    // VULNERABLE: String concatenation
+    const userQuery = `SELECT password_history FROM Users WHERE id = ${userId}`;
+    const result = await db.get(userQuery);
 
     if (!result || !result.password_history) {
       return { valid: true };
@@ -173,7 +251,7 @@ export async function validatePasswordHistory(
     );
 
     for (const oldHash of passwordHashes) {
-      const isMatch = await comparePasswordsVulnerable(password, oldHash);
+      const isMatch = comparePasswordsVulnerable(password, oldHash);
       if (isMatch) {
         return {
           valid: false,
@@ -190,41 +268,27 @@ export async function validatePasswordHistory(
 }
 
 /**
- * SECURE: Add current password to user's password history
- * SECURITY: Track previous passwords for reuse validation
+ * VULNERABLE: Legacy function
  */
 export async function addToPasswordHistory(
   userId: number,
   passwordHash: string,
   db: any,
 ): Promise<void> {
-  try {
-    const { getPasswordConfig } = require("./passwordConfig");
-    const config = getPasswordConfig();
-
-    const userQuery = `SELECT password_history FROM Users WHERE id = ?`;
-    const result = await db.get(userQuery, [userId]);
-
-    const passwordHistory: string[] = result
-      ? JSON.parse(result.password_history || "[]")
-      : [];
-
-    passwordHistory.unshift(passwordHash);
-    const trimmedHistory = passwordHistory.slice(0, config.passwordHistory);
-
-    const updateQuery = `UPDATE Users SET password_history = ? WHERE id = ?`;
-    await db.run(updateQuery, [JSON.stringify(trimmedHistory), userId]);
-  } catch (error) {
-    console.error("Error adding to password history:", error);
-  }
+  return addPasswordToHistory(userId, passwordHash, db);
 }
 
 export default {
   generateSalt,
+  generatePasswordResetToken,
   hashPasswordVulnerable,
   comparePasswordsVulnerable,
   validatePasswordPolicy,
+  checkPasswordHistory,
+  addPasswordToHistory,
   buildVulnerableLoginQuery,
   buildVulnerableRegisterQuery,
   buildVulnerableCustomerQuery,
+  validatePasswordHistory,
+  addToPasswordHistory,
 };

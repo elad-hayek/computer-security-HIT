@@ -1,18 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/router";
 
-export default function Register() {
+export default function ResetPassword() {
+  const router = useRouter();
+  const { token } = router.query;
   const [formData, setFormData] = useState({
-    username: "",
-    email: "",
-    firstName: "",
-    lastName: "",
-    phone: "",
-    password: "",
+    newPassword: "",
     confirmPassword: "",
   });
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [passwordValidation, setPasswordValidation] = useState({
     minLength: false,
     hasUppercase: false,
@@ -20,6 +19,16 @@ export default function Register() {
     hasDigit: false,
     hasSpecial: false,
   });
+  const [tokenStatus, setTokenStatus] = useState<
+    "checking" | "valid" | "invalid"
+  >("checking");
+
+  useEffect(() => {
+    if (token) {
+      // Validate token by checking if it exists in form submission
+      setTokenStatus("valid");
+    }
+  }, [token]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -29,7 +38,7 @@ export default function Register() {
     });
 
     // Live password validation
-    if (name === "password") {
+    if (name === "newPassword") {
       setPasswordValidation({
         minLength: value.length >= 10,
         hasUppercase: /[A-Z]/.test(value),
@@ -44,36 +53,45 @@ export default function Register() {
     e.preventDefault();
     setMessage("");
     setErrors([]);
+    setIsLoading(true);
+
+    if (!token) {
+      setMessage("✗ Invalid reset link");
+      setIsLoading(false);
+      return;
+    }
 
     try {
-      const res = await fetch("/api/auth/register", {
+      const res = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          token,
+          newPassword: formData.newPassword,
+          confirmPassword: formData.confirmPassword,
+        }),
       });
 
       const data = await res.json();
 
       if (data.success) {
-        setMessage("✓ Registration successful! Redirecting to login...");
+        setMessage("✓ Password reset successfully! Redirecting to login...");
         setFormData({
-          username: "",
-          email: "",
-          firstName: "",
-          lastName: "",
-          phone: "",
-          password: "",
+          newPassword: "",
           confirmPassword: "",
         });
         setTimeout(() => {
-          window.location.href = "/login";
+          router.push("/login");
         }, 2000);
       } else {
         setMessage("✗ " + data.message);
         if (data.errors) setErrors(data.errors);
+        setTokenStatus("invalid");
       }
     } catch (error: any) {
       setMessage("✗ Error: " + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -84,76 +102,47 @@ export default function Register() {
     passwordValidation.hasDigit &&
     passwordValidation.hasSpecial;
 
+  if (tokenStatus === "checking") {
+    return (
+      <div style={styles.container}>
+        <div style={styles.card}>
+          <p>Validating reset link...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (tokenStatus === "invalid") {
+    return (
+      <div style={styles.container}>
+        <div style={styles.card}>
+          <h1>Reset Password - Communication_LTD</h1>
+          <p style={{ color: "red" }}>
+            Invalid or expired reset link. Please request a new one.
+          </p>
+          <Link href="/forgot-password">Request new reset link</Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1>Register - Communication_LTD</h1>
+        <h1>Reset Password - Communication_LTD</h1>
         <p style={styles.secure}>✓ SECURE VERSION - Production Ready</p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.section}>
-            <h3>Account Information</h3>
-            <input
-              type="text"
-              name="username"
-              placeholder="Username"
-              value={formData.username}
-              onChange={handleChange}
-              required
-              style={styles.input}
-            />
-
-            <input
-              type="email"
-              name="email"
-              placeholder="Email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              style={styles.input}
-            />
-          </div>
-
-          <div style={styles.section}>
-            <h3>Personal Information</h3>
-            <input
-              type="text"
-              name="firstName"
-              placeholder="First Name (optional)"
-              value={formData.firstName}
-              onChange={handleChange}
-              style={styles.input}
-            />
-
-            <input
-              type="text"
-              name="lastName"
-              placeholder="Last Name (optional)"
-              value={formData.lastName}
-              onChange={handleChange}
-              style={styles.input}
-            />
-
-            <input
-              type="tel"
-              name="phone"
-              placeholder="Phone (optional)"
-              value={formData.phone}
-              onChange={handleChange}
-              style={styles.input}
-            />
-          </div>
-
-          <div style={styles.section}>
-            <h3>Password</h3>
             <input
               type="password"
-              name="password"
-              placeholder="Password"
-              value={formData.password}
+              name="newPassword"
+              placeholder="New Password"
+              value={formData.newPassword}
               onChange={handleChange}
               required
               style={styles.input}
+              disabled={isLoading}
             />
 
             <div style={styles.passwordRequirements}>
@@ -200,17 +189,18 @@ export default function Register() {
                 {passwordValidation.hasSpecial ? "✓" : "✗"} Special character
               </div>
             </div>
-
-            <input
-              type="password"
-              name="confirmPassword"
-              placeholder="Confirm Password"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              required
-              style={styles.input}
-            />
           </div>
+
+          <input
+            type="password"
+            name="confirmPassword"
+            placeholder="Confirm New Password"
+            value={formData.confirmPassword}
+            onChange={handleChange}
+            required
+            style={styles.input}
+            disabled={isLoading}
+          />
 
           <button
             type="submit"
@@ -219,9 +209,9 @@ export default function Register() {
               opacity: isPasswordValid ? 1 : 0.5,
               cursor: isPasswordValid ? "pointer" : "not-allowed",
             }}
-            disabled={!isPasswordValid}
+            disabled={!isPasswordValid || isLoading}
           >
-            Register
+            {isLoading ? "Resetting Password..." : "Reset Password"}
           </button>
         </form>
 
@@ -247,12 +237,12 @@ export default function Register() {
         )}
 
         <p style={styles.link}>
-          Already have an account? <Link href="/login">Login here</Link>
+          <Link href="/login">Back to Login</Link>
         </p>
 
         <p style={styles.note}>
-          🟢 SECURE: Passwords hashed with bcryptjs. Parameterized queries
-          prevent SQL injection. Password history tracked to prevent reuse.
+          🟢 SECURE: Token expires after 1 hour. Password history checked to
+          prevent reuse.
         </p>
       </div>
     </div>
@@ -273,7 +263,7 @@ const styles = {
     padding: "40px",
     borderRadius: "8px",
     boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-    maxWidth: "600px",
+    maxWidth: "500px",
     width: "100%",
   },
   secure: {
@@ -321,6 +311,7 @@ const styles = {
     padding: "10px",
     borderRadius: "4px",
     backgroundColor: "#f0f0f0",
+    textAlign: "center" as const,
   },
   errors: {
     marginTop: "15px",

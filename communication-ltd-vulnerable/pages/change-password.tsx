@@ -1,18 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/router";
 
-export default function Register() {
+// VULNERABLE VERSION - Educational Purpose Only
+// This version demonstrates password change vulnerabilities
+
+export default function ChangePassword() {
+  const router = useRouter();
+  const [userId, setUserId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    username: "",
-    email: "",
-    firstName: "",
-    lastName: "",
-    phone: "",
-    password: "",
+    oldPassword: "",
+    newPassword: "",
     confirmPassword: "",
   });
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [passwordValidation, setPasswordValidation] = useState({
     minLength: false,
     hasUppercase: false,
@@ -21,6 +24,15 @@ export default function Register() {
     hasSpecial: false,
   });
 
+  useEffect(() => {
+    const storedUserId = localStorage.getItem("userId");
+    if (!storedUserId) {
+      router.push("/login");
+      return;
+    }
+    setUserId(storedUserId);
+  }, [router]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData({
@@ -28,8 +40,7 @@ export default function Register() {
       [name]: value,
     });
 
-    // Live password validation
-    if (name === "password") {
+    if (name === "newPassword") {
       setPasswordValidation({
         minLength: value.length >= 10,
         hasUppercase: /[A-Z]/.test(value),
@@ -44,29 +55,40 @@ export default function Register() {
     e.preventDefault();
     setMessage("");
     setErrors([]);
+    setIsLoading(true);
+
+    if (!userId) {
+      setMessage("✗ User not authenticated");
+      setIsLoading(false);
+      return;
+    }
 
     try {
-      const res = await fetch("/api/auth/register", {
+      // VULNERABILITY: oldPassword not verified in vulnerable API endpoint
+      // An attacker could change password without knowing current password
+      // by modifying the userId in localStorage to another user's ID
+      const res = await fetch("/api/auth/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          userId,
+          oldPassword: formData.oldPassword,
+          newPassword: formData.newPassword,
+          confirmPassword: formData.confirmPassword,
+        }),
       });
 
       const data = await res.json();
 
       if (data.success) {
-        setMessage("✓ Registration successful! Redirecting to login...");
+        setMessage("✓ Password changed successfully! Redirecting...");
         setFormData({
-          username: "",
-          email: "",
-          firstName: "",
-          lastName: "",
-          phone: "",
-          password: "",
+          oldPassword: "",
+          newPassword: "",
           confirmPassword: "",
         });
         setTimeout(() => {
-          window.location.href = "/login";
+          router.push("/dashboard");
         }, 2000);
       } else {
         setMessage("✗ " + data.message);
@@ -74,6 +96,8 @@ export default function Register() {
       }
     } catch (error: any) {
       setMessage("✗ Error: " + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -84,76 +108,42 @@ export default function Register() {
     passwordValidation.hasDigit &&
     passwordValidation.hasSpecial;
 
+  if (!userId) {
+    return null;
+  }
+
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1>Register - Communication_LTD</h1>
-        <p style={styles.secure}>✓ SECURE VERSION - Production Ready</p>
+        <h1>Change Password - Communication_LTD</h1>
+        <p style={styles.vulnerable}>
+          ⚠ VULNERABLE VERSION - Security Flaws Demonstrated
+        </p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.section}>
-            <h3>Account Information</h3>
-            <input
-              type="text"
-              name="username"
-              placeholder="Username"
-              value={formData.username}
-              onChange={handleChange}
-              required
-              style={styles.input}
-            />
-
-            <input
-              type="email"
-              name="email"
-              placeholder="Email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              style={styles.input}
-            />
-          </div>
-
-          <div style={styles.section}>
-            <h3>Personal Information</h3>
-            <input
-              type="text"
-              name="firstName"
-              placeholder="First Name (optional)"
-              value={formData.firstName}
-              onChange={handleChange}
-              style={styles.input}
-            />
-
-            <input
-              type="text"
-              name="lastName"
-              placeholder="Last Name (optional)"
-              value={formData.lastName}
-              onChange={handleChange}
-              style={styles.input}
-            />
-
-            <input
-              type="tel"
-              name="phone"
-              placeholder="Phone (optional)"
-              value={formData.phone}
-              onChange={handleChange}
-              style={styles.input}
-            />
-          </div>
-
-          <div style={styles.section}>
-            <h3>Password</h3>
+            {/* VULNERABILITY: oldPassword field present but not validated on backend */}
+            {/* The vulnerable endpoint doesn't check this field */}
             <input
               type="password"
-              name="password"
-              placeholder="Password"
-              value={formData.password}
+              name="oldPassword"
+              placeholder="Current Password (ignored by vulnerable backend)"
+              value={formData.oldPassword}
               onChange={handleChange}
               required
               style={styles.input}
+              disabled={isLoading}
+            />
+
+            <input
+              type="password"
+              name="newPassword"
+              placeholder="New Password"
+              value={formData.newPassword}
+              onChange={handleChange}
+              required
+              style={styles.input}
+              disabled={isLoading}
             />
 
             <div style={styles.passwordRequirements}>
@@ -200,17 +190,18 @@ export default function Register() {
                 {passwordValidation.hasSpecial ? "✓" : "✗"} Special character
               </div>
             </div>
-
-            <input
-              type="password"
-              name="confirmPassword"
-              placeholder="Confirm Password"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              required
-              style={styles.input}
-            />
           </div>
+
+          <input
+            type="password"
+            name="confirmPassword"
+            placeholder="Confirm New Password"
+            value={formData.confirmPassword}
+            onChange={handleChange}
+            required
+            style={styles.input}
+            disabled={isLoading}
+          />
 
           <button
             type="submit"
@@ -219,9 +210,9 @@ export default function Register() {
               opacity: isPasswordValid ? 1 : 0.5,
               cursor: isPasswordValid ? "pointer" : "not-allowed",
             }}
-            disabled={!isPasswordValid}
+            disabled={!isPasswordValid || isLoading}
           >
-            Register
+            {isLoading ? "Changing Password..." : "Change Password"}
           </button>
         </form>
 
@@ -247,12 +238,13 @@ export default function Register() {
         )}
 
         <p style={styles.link}>
-          Already have an account? <Link href="/login">Login here</Link>
+          <Link href="/dashboard">Back to Dashboard</Link>
         </p>
 
         <p style={styles.note}>
-          🟢 SECURE: Passwords hashed with bcryptjs. Parameterized queries
-          prevent SQL injection. Password history tracked to prevent reuse.
+          🔴 VULNERABLE: Backend doesn't verify old password. SQL injection in
+          password history check. No verification that userId in localStorage
+          matches actual session. Password not hashed securely.
         </p>
       </div>
     </div>
@@ -273,11 +265,11 @@ const styles = {
     padding: "40px",
     borderRadius: "8px",
     boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-    maxWidth: "600px",
+    maxWidth: "500px",
     width: "100%",
   },
-  secure: {
-    color: "#2e7d32",
+  vulnerable: {
+    color: "#d32f2f",
     fontWeight: "bold" as const,
     marginBottom: "20px",
   },
@@ -299,7 +291,7 @@ const styles = {
   },
   passwordRequirements: {
     padding: "10px",
-    backgroundColor: "#f9f9f9",
+    backgroundColor: "#fff3e0",
     borderRadius: "4px",
     fontSize: "12px",
   },
@@ -309,7 +301,7 @@ const styles = {
   },
   button: {
     padding: "10px",
-    backgroundColor: "#2e7d32",
+    backgroundColor: "#d32f2f",
     color: "white",
     border: "none",
     borderRadius: "4px",
@@ -321,6 +313,7 @@ const styles = {
     padding: "10px",
     borderRadius: "4px",
     backgroundColor: "#f0f0f0",
+    textAlign: "center" as const,
   },
   errors: {
     marginTop: "15px",
@@ -337,9 +330,9 @@ const styles = {
   note: {
     marginTop: "20px",
     padding: "15px",
-    backgroundColor: "#e8f5e9",
+    backgroundColor: "#ffebee",
     borderRadius: "4px",
     fontSize: "12px",
-    borderLeft: "4px solid #2e7d32",
+    borderLeft: "4px solid #d32f2f",
   },
 };

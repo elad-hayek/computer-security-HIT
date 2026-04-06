@@ -4,7 +4,23 @@
 import bcryptjs from "bcryptjs";
 import crypto from "crypto";
 
-const SALT_ROUNDS = 12; // bcryptjs salty rounds for hashing
+const SALT_ROUNDS = 12; // bcryptjs salt rounds for hashing
+
+/**
+ * SECURE: Generate a random salt for additional security
+ * Note: bcryptjs includes salt in the hash, but this can be used elsewhere
+ */
+export function generateSalt(): string {
+  return crypto.randomBytes(16).toString("hex");
+}
+
+/**
+ * SECURE: Generate a cryptographically secure password reset token
+ * Returns the token as hex string (should be sent via email)
+ */
+export function generatePasswordResetToken(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
 
 /**
  * SECURE: Hash password using bcryptjs
@@ -160,31 +176,29 @@ export function checkPasswordDictionary(password: string): {
 }
 
 /**
- * SECURE: Validate password hasn't been used in last N times
+ * SECURE: Check password history - verify new password isn't in last N passwords
  * SECURITY: Prevents password reuse attacks
+ * Uses PasswordHistory table with individual rows per password for better queryability
  */
-export async function validatePasswordHistory(
+export async function checkPasswordHistory(
   userId: number,
   password: string,
   db: any,
+  config: any,
 ): Promise<{ valid: boolean; reason?: string }> {
   try {
-    const { getPasswordConfig } = require("./passwordConfig");
-    const config = getPasswordConfig();
+    // SECURE: Parameterized query to get last N password hashes
+    const query = `
+      SELECT password_hash FROM PasswordHistory 
+      WHERE user_id = ? 
+      ORDER BY created_date DESC 
+      LIMIT ?
+    `;
+    const results = await db.all(query, [userId, config.passwordHistory]);
 
-    const userQuery = `SELECT password_history FROM Users WHERE id = ?`;
-    const result = await db.get(userQuery, [userId]);
-
-    if (!result || !result.password_history) {
-      return { valid: true };
-    }
-
-    const passwordHashes: string[] = JSON.parse(
-      result.password_history || "[]",
-    );
-
-    for (const oldHash of passwordHashes) {
-      const isMatch = await comparePasswordsSecure(password, oldHash);
+    // Check if new password matches any of the last N passwords
+    for (const row of results) {
+      const isMatch = await comparePasswordsSecure(password, row.password_hash);
       if (isMatch) {
         return {
           valid: false,
@@ -195,48 +209,75 @@ export async function validatePasswordHistory(
 
     return { valid: true };
   } catch (error) {
+    console.error("Error checking password history:", error);
+    return { valid: true };
+  }
+}
+
+/**
+ * SECURE: Add password to history
+ * SECURITY: Track password changes for reuse prevention
+ * Stores individual hash with timestamp in PasswordHistory table
+ */
+export async function addPasswordToHistory(
+  userId: number,
+  passwordHash: string,
+  db: any,
+): Promise<void> {
+  try {
+    // SECURE: Parameterized insert query
+    const query = `
+      INSERT INTO PasswordHistory (user_id, password_hash, created_date)
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+    `;
+    await db.run(query, [userId, passwordHash]);
+  } catch (error) {
+    console.error("Error adding password to history:", error);
+  }
+}
+
+/**
+ * SECURITY: Legacy validation function for password policy
+ * Kept for backward compatibility but deprecated - use validatePasswordPolicy instead
+ */
+export async function validatePasswordHistory(
+  userId: number,
+  password: string,
+  db: any,
+): Promise<{ valid: boolean; reason?: string }> {
+  try {
+    const { getPasswordConfig } = require("./passwordConfig");
+    const config = getPasswordConfig();
+    return checkPasswordHistory(userId, password, db, config);
+  } catch (error) {
     console.error("Error validating password history:", error);
     return { valid: true };
   }
 }
 
 /**
- * SECURE: Add current password to user's password history
- * SECURITY: Track previous passwords for reuse validation
+ * SECURITY: Legacy function for backward compatibility
+ * Use addPasswordToHistory instead
  */
 export async function addToPasswordHistory(
   userId: number,
   passwordHash: string,
   db: any,
 ): Promise<void> {
-  try {
-    const { getPasswordConfig } = require("./passwordConfig");
-    const config = getPasswordConfig();
-
-    const userQuery = `SELECT password_history FROM Users WHERE id = ?`;
-    const result = await db.get(userQuery, [userId]);
-
-    const passwordHistory: string[] = result
-      ? JSON.parse(result.password_history || "[]")
-      : [];
-
-    passwordHistory.unshift(passwordHash);
-    const trimmedHistory = passwordHistory.slice(0, config.passwordHistory);
-
-    const updateQuery = `UPDATE Users SET password_history = ? WHERE id = ?`;
-    await db.run(updateQuery, [JSON.stringify(trimmedHistory), userId]);
-  } catch (error) {
-    console.error("Error adding to password history:", error);
-  }
+  return addPasswordToHistory(userId, passwordHash, db);
 }
 
 export default {
   generateSalt,
+  generatePasswordResetToken,
   hashPasswordSecure,
   comparePasswordsSecure,
   validatePasswordPolicy,
+  checkPasswordHistory,
+  addPasswordToHistory,
   buildSecureLoginQuery,
   buildSecureRegisterQuery,
   buildSecureCustomerQuery,
-  generatePasswordResetToken,
+  validatePasswordHistory,
+  addToPasswordHistory,
 };

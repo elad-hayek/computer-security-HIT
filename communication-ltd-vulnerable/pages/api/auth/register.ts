@@ -4,6 +4,7 @@ import {
   validatePasswordPolicy,
   hashPasswordVulnerable,
   generateSalt,
+  addPasswordToHistory,
 } from "@/lib/auth";
 import { getPasswordConfig, isWeakPassword } from "@/lib/passwordConfig";
 
@@ -20,7 +21,8 @@ type ResponseData = {
  * This endpoint demonstrates INSECURE practices:
  * 1. Plain-text password storage (NO hashing)
  * 2. Direct SQL string concatenation (SQL Injection vulnerability)
- * 3. No proper error handling
+ * 3. No proper input validation/sanitization
+ * 4. VULNERABLE PASSWORD HISTORY: String concatenation in PasswordHistory insert
  */
 export default async function handler(
   req: NextApiRequest,
@@ -32,7 +34,15 @@ export default async function handler(
       .json({ success: false, message: "Method not allowed" });
   }
 
-  const { username, email, password, confirmPassword } = req.body;
+  const {
+    username,
+    email,
+    firstName,
+    lastName,
+    phone,
+    password,
+    confirmPassword,
+  } = req.body;
 
   // Basic validation
   if (!username || !email || !password || !confirmPassword) {
@@ -60,7 +70,7 @@ export default async function handler(
     });
   }
 
-  // VULNERABLE: Shows dictionary check but API doesn't encode output (form does XSS)
+  // VULNERABLE: Dictionary check without proper output encoding
   if (config.dictionaryCheckEnabled && isWeakPassword(password)) {
     return res.status(400).json({
       success: false,
@@ -76,20 +86,34 @@ export default async function handler(
     const salt = generateSalt();
 
     // VULNERABLE: Build query with string concatenation
-    // WHY THIS IS BAD: SQL Injection attack possible
-    // Example attack: username = "'); DROP TABLE Users; --"
-    const query = `INSERT INTO Users (username, email, password_hash, salt, created_date) VALUES ('${username}', '${email}', '${passwordHash}', '${salt}', CURRENT_TIMESTAMP)`;
+    // ATTACK EXAMPLE:
+    // username = "admin'); DROP TABLE Users; --"
+    // This would execute: INSERT INTO Users (...) VALUES ('admin'); DROP TABLE Users; --', ...)
+    //
+    // Or XSS via firstName:
+    // firstName = "<img src=x onerror='alert(1)'>"
+    // This would be stored as-is and executed later
+    const query = `INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, salt, created_date) VALUES ('${username}', '${email}', '${firstName || ""}', '${lastName || ""}', '${phone || ""}', '${passwordHash}', '${salt}', CURRENT_TIMESTAMP)`;
 
-    console.log("[DEBUG] Executing query:", query); // Dangerous - shows SQL
+    console.log("[DEBUG] Executing query:", query); // VULNERABLE: Shows SQL
 
     const db = await getConnection();
 
-    // VULNERABLE: Direct string concatenation
+    // VULNERABLE: Direct string execution
     await db.run(query);
+
+    // Get the newly created user's ID to add to password history (with SQL injection)
+    const userQuery = `SELECT id FROM Users WHERE username = '${username}'`; // VULNERABLE!
+    const user = await db.get(userQuery);
+
+    if (user) {
+      // VULNERABLE: Password history with SQL injection
+      await addPasswordToHistory(user.id, passwordHash, db);
+    }
 
     return res.status(201).json({
       success: true,
-      message: `User '${username}' registered successfully (VULNERABLE VERSION)`,
+      message: `User '${username}' registered successfully`,
     });
   } catch (error: any) {
     console.error("Registration error:", error);

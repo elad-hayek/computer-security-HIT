@@ -3,8 +3,8 @@ import { getConnection } from "@/lib/db";
 import {
   validatePasswordPolicy,
   hashPasswordSecure,
-  comparePasswordsSecure,
   generateSalt,
+  addPasswordToHistory,
 } from "@/lib/auth";
 import { getPasswordConfig, isWeakPassword } from "@/lib/passwordConfig";
 import { escape as htmlEscape } from "html-escaper";
@@ -22,8 +22,8 @@ type ResponseData = {
  * This endpoint demonstrates SECURE practices:
  * 1. Password hashing with bcryptjs (12 salt rounds)
  * 2. Parameterized queries prevent SQL Injection
- * 3. Proper error handling and validation
- * 4. Rate limiting ready (can be added)
+ * 3. Password history tracking in separate table
+ * 4. Proper error handling and validation
  */
 export default async function handler(
   req: NextApiRequest,
@@ -35,7 +35,15 @@ export default async function handler(
       .json({ success: false, message: "Method not allowed" });
   }
 
-  const { username, email, password, confirmPassword } = req.body;
+  const {
+    username,
+    email,
+    firstName,
+    lastName,
+    phone,
+    password,
+    confirmPassword,
+  } = req.body;
 
   // Basic validation
   if (!username || !email || !password || !confirmPassword) {
@@ -75,40 +83,48 @@ export default async function handler(
   if (config.dictionaryCheckEnabled && isWeakPassword(password)) {
     return res.status(400).json({
       success: false,
-      message: htmlEscape("Password is too common. Please choose a more unique password."),
-      errors: ["WEAK_PASSWORD"]
+      message: htmlEscape(
+        "Password is too common. Please choose a more unique password.",
+      ),
+      errors: ["WEAK_PASSWORD"],
     });
   }
 
   try {
-    // SECURE: Hash password with bcryptjs (salt included in hash)
-    // WHY: Bcryptjs uses adaptive hashing resistant to brute force
-    const passwordHash = await hashPasswordSecure(password);
-    const salt = generateSalt(); // Not strictly needed with bcryptjs, but keeping for schema
-
-    // SECURE: Use parameterized query
-    const query = `INSERT INTO Users (username, email, password_hash, salt, created_date) 
-                   VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`;
-
     const db = await getConnection();
 
-    // SECURE: Execute query with parameters
-    // SQLite treats ? as placeholder, parameters are passed separately
-    await db.run(query, [username, email, passwordHash, salt]);
+    // SECURE: Hash password with bcryptjs
+    const passwordHash = await hashPasswordSecure(password);
+    const salt = generateSalt();
+
+    // SECURE: Use parameterized query with new fields
+    const query = `
+      INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, salt, created_date) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `;
+
+    await db.run(query, [
+      username,
+      email,
+      firstName || null,
+      lastName || null,
+      phone || null,
+      passwordHash,
+      salt,
+    ]);
+
+    // Get the newly created user's ID to add to password history
+    const userQuery = `SELECT id FROM Users WHERE username = ?`;
+    const user = await db.get(userQuery, [username]);
+
+    if (user) {
+      // Add initial password to history
+      await addPasswordToHistory(user.id, passwordHash, db);
+    }
 
     return res.status(201).json({
       success: true,
-      message: `User '${username}' registered successfully (SECURE VERSION)`,
-    });
-  } catch (error: any) {
-    console.error("Registration error:", error);
-
-    // Check if it's a duplicate username/email error
-    await request.query(query);
-
-    return res.status(201).json({
-      success: true,
-      message: `User '${username}' registered successfully (SECURE VERSION)`,
+      message: `User '${username}' registered successfully`,
     });
   } catch (error: any) {
     console.error("Registration error:", error);

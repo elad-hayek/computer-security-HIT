@@ -1,18 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/router";
+import Cookies from "js-cookie";
 
-export default function Register() {
+export default function ChangePassword() {
+  const router = useRouter();
+  const [userId, setUserId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
-    username: "",
-    email: "",
-    firstName: "",
-    lastName: "",
-    phone: "",
-    password: "",
+    oldPassword: "",
+    newPassword: "",
     confirmPassword: "",
   });
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [passwordValidation, setPasswordValidation] = useState({
     minLength: false,
     hasUppercase: false,
@@ -20,6 +21,17 @@ export default function Register() {
     hasDigit: false,
     hasSpecial: false,
   });
+
+  useEffect(() => {
+    // Check for authentication
+    const storedUserId =
+      typeof window !== "undefined" ? localStorage.getItem("userId") : null;
+    if (!storedUserId) {
+      router.push("/login");
+    } else {
+      setUserId(Number(storedUserId));
+    }
+  }, [router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -29,7 +41,7 @@ export default function Register() {
     });
 
     // Live password validation
-    if (name === "password") {
+    if (name === "newPassword") {
       setPasswordValidation({
         minLength: value.length >= 10,
         hasUppercase: /[A-Z]/.test(value),
@@ -44,29 +56,29 @@ export default function Register() {
     e.preventDefault();
     setMessage("");
     setErrors([]);
+    setIsLoading(true);
 
     try {
-      const res = await fetch("/api/auth/register", {
+      const res = await fetch("/api/auth/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          userId,
+          ...formData,
+        }),
       });
 
       const data = await res.json();
 
       if (data.success) {
-        setMessage("✓ Registration successful! Redirecting to login...");
+        setMessage("✓ Password changed successfully!");
         setFormData({
-          username: "",
-          email: "",
-          firstName: "",
-          lastName: "",
-          phone: "",
-          password: "",
+          oldPassword: "",
+          newPassword: "",
           confirmPassword: "",
         });
         setTimeout(() => {
-          window.location.href = "/login";
+          router.push("/dashboard");
         }, 2000);
       } else {
         setMessage("✗ " + data.message);
@@ -74,6 +86,8 @@ export default function Register() {
       }
     } catch (error: any) {
       setMessage("✗ Error: " + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -87,73 +101,31 @@ export default function Register() {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1>Register - Communication_LTD</h1>
+        <h1>Change Password - Communication_LTD</h1>
         <p style={styles.secure}>✓ SECURE VERSION - Production Ready</p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
-          <div style={styles.section}>
-            <h3>Account Information</h3>
-            <input
-              type="text"
-              name="username"
-              placeholder="Username"
-              value={formData.username}
-              onChange={handleChange}
-              required
-              style={styles.input}
-            />
-
-            <input
-              type="email"
-              name="email"
-              placeholder="Email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              style={styles.input}
-            />
-          </div>
+          <input
+            type="password"
+            name="oldPassword"
+            placeholder="Current Password"
+            value={formData.oldPassword}
+            onChange={handleChange}
+            required
+            style={styles.input}
+            disabled={isLoading}
+          />
 
           <div style={styles.section}>
-            <h3>Personal Information</h3>
-            <input
-              type="text"
-              name="firstName"
-              placeholder="First Name (optional)"
-              value={formData.firstName}
-              onChange={handleChange}
-              style={styles.input}
-            />
-
-            <input
-              type="text"
-              name="lastName"
-              placeholder="Last Name (optional)"
-              value={formData.lastName}
-              onChange={handleChange}
-              style={styles.input}
-            />
-
-            <input
-              type="tel"
-              name="phone"
-              placeholder="Phone (optional)"
-              value={formData.phone}
-              onChange={handleChange}
-              style={styles.input}
-            />
-          </div>
-
-          <div style={styles.section}>
-            <h3>Password</h3>
             <input
               type="password"
-              name="password"
-              placeholder="Password"
-              value={formData.password}
+              name="newPassword"
+              placeholder="New Password"
+              value={formData.newPassword}
               onChange={handleChange}
               required
               style={styles.input}
+              disabled={isLoading}
             />
 
             <div style={styles.passwordRequirements}>
@@ -200,17 +172,18 @@ export default function Register() {
                 {passwordValidation.hasSpecial ? "✓" : "✗"} Special character
               </div>
             </div>
-
-            <input
-              type="password"
-              name="confirmPassword"
-              placeholder="Confirm Password"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              required
-              style={styles.input}
-            />
           </div>
+
+          <input
+            type="password"
+            name="confirmPassword"
+            placeholder="Confirm New Password"
+            value={formData.confirmPassword}
+            onChange={handleChange}
+            required
+            style={styles.input}
+            disabled={isLoading}
+          />
 
           <button
             type="submit"
@@ -219,9 +192,9 @@ export default function Register() {
               opacity: isPasswordValid ? 1 : 0.5,
               cursor: isPasswordValid ? "pointer" : "not-allowed",
             }}
-            disabled={!isPasswordValid}
+            disabled={!isPasswordValid || isLoading}
           >
-            Register
+            {isLoading ? "Changing Password..." : "Change Password"}
           </button>
         </form>
 
@@ -247,12 +220,12 @@ export default function Register() {
         )}
 
         <p style={styles.link}>
-          Already have an account? <Link href="/login">Login here</Link>
+          <Link href="/dashboard">Back to Dashboard</Link>
         </p>
 
         <p style={styles.note}>
-          🟢 SECURE: Passwords hashed with bcryptjs. Parameterized queries
-          prevent SQL injection. Password history tracked to prevent reuse.
+          🟢 SECURE: Password history checked to prevent reuse. Bcryptjs hashing
+          used.
         </p>
       </div>
     </div>
@@ -273,7 +246,7 @@ const styles = {
     padding: "40px",
     borderRadius: "8px",
     boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-    maxWidth: "600px",
+    maxWidth: "500px",
     width: "100%",
   },
   secure: {
@@ -321,6 +294,7 @@ const styles = {
     padding: "10px",
     borderRadius: "4px",
     backgroundColor: "#f0f0f0",
+    textAlign: "center" as const,
   },
   errors: {
     marginTop: "15px",

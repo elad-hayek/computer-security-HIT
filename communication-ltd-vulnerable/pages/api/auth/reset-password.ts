@@ -1,6 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection } from "@/lib/db";
-import { validatePasswordPolicy, hashPasswordVulnerable } from "@/lib/auth";
+import {
+  validatePasswordPolicy,
+  hashPasswordVulnerable,
+  checkPasswordHistory,
+  addPasswordToHistory,
+} from "@/lib/auth";
+import { getPasswordConfig } from "@/lib/passwordConfig";
 import crypto from "crypto";
 
 type ResponseData = {
@@ -12,6 +18,12 @@ type ResponseData = {
 /**
  * VULNERABLE Reset Password API Endpoint
  * POST /api/auth/reset-password
+ *
+ * VULNERABILITIES:
+ * 1. Plain text password storage (no hashing)
+ * 2. SQL injection in token lookup query (string concatenation)
+ * 3. SQL injection in password history check (checkPasswordHistory)
+ * 4. No password history validation protection - could reuse same password
  */
 export default async function handler(
   req: NextApiRequest,
@@ -37,14 +49,7 @@ export default async function handler(
       .json({ success: false, message: "Passwords do not match" });
   }
 
-  const config = {
-    minLength: parseInt(process.env.CONFIG_PASSWORD_MIN_LENGTH || "10"),
-    requireUppercase: process.env.CONFIG_PASSWORD_REQUIRE_UPPERCASE === "true",
-    requireLowercase: process.env.CONFIG_PASSWORD_REQUIRE_LOWERCASE === "true",
-    requireDigits: process.env.CONFIG_PASSWORD_REQUIRE_DIGITS === "true",
-    requireSpecialChars:
-      process.env.CONFIG_PASSWORD_REQUIRE_SPECIAL_CHARS === "true",
-  };
+  const config = getPasswordConfig();
 
   const validation = validatePasswordPolicy(newPassword, config);
   if (!validation.valid) {
@@ -56,13 +61,17 @@ export default async function handler(
   }
 
   try {
-    // Hash token to find it
+    // Hash token to find it (but we'll use it in a vulnerable query)
     const tokenHash = crypto.createHash("sha1").update(token).digest("hex");
 
     const db = await getConnection();
 
-    // VULNERABLE: Direct string concatenation
+    // VULNERABLE: Direct string concatenation with tokenHash
+    // Even though tokenHash is derived from SHA-1, the query format is still vulnerable
+    // Attack: If token input crafted carefully, attacker could inject SQL
     const tokenQuery = `SELECT user_id, expiry_date, used FROM PasswordResetTokens WHERE token_hash = '${tokenHash}'`;
+    console.log("[VULNERABLE DEBUG] Token query:", tokenQuery);
+
     const tokenResult = await db.all(tokenQuery);
 
     if (tokenResult.length === 0 || tokenResult[0].used) {
@@ -79,19 +88,41 @@ export default async function handler(
         .json({ success: false, message: "Token has expired" });
     }
 
+    // NOTE: This checks password history but uses vulnerable SQL injection
+    const historyCheck = await checkPasswordHistory(
+      tokenData.user_id,
+      newPassword,
+      db,
+      config,
+    );
+
+    if (!historyCheck.valid) {
+      return res.status(400).json({
+        success: false,
+        message: historyCheck.reason || "Password validation failed",
+      });
+    }
+
+    // VULNERABLE: Plain text password storage
     const newHash = hashPasswordVulnerable(newPassword, "");
 
     // VULNERABLE: Direct string concatenation
+    // ATTACK: newHash = "test'; DROP TABLE Users; --"
     const updateQuery = `UPDATE Users SET password_hash = '${newHash}' WHERE id = ${tokenData.user_id}`;
+    console.log("[VULNERABLE DEBUG] Update query:", updateQuery);
+
     await db.run(updateQuery);
 
-    // Mark token as used - VULNERABLE
+    // VULNERABLE: Mark token as used with SQL injection
     const markUsedQuery = `UPDATE PasswordResetTokens SET used = 1 WHERE token_hash = '${tokenHash}'`;
     await db.run(markUsedQuery);
 
+    // VULNERABLE: Add password to history with SQL injection
+    await addPasswordToHistory(tokenData.user_id, newHash, db);
+
     return res.status(200).json({
       success: true,
-      message: "Password reset successfully (VULNERABLE VERSION)",
+      message: "Password reset successfully",
     });
   } catch (error: any) {
     console.error("Reset password error:", error);

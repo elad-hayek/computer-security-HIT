@@ -1,18 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/router";
 
-export default function Register() {
+// VULNERABLE VERSION - Educational Purpose Only
+// This version demonstrates common Security vulnerabilities in password reset flows
+
+export default function ResetPassword() {
+  const router = useRouter();
+  const { token } = router.query;
   const [formData, setFormData] = useState({
-    username: "",
-    email: "",
-    firstName: "",
-    lastName: "",
-    phone: "",
-    password: "",
+    newPassword: "",
     confirmPassword: "",
   });
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [passwordValidation, setPasswordValidation] = useState({
     minLength: false,
     hasUppercase: false,
@@ -20,6 +22,17 @@ export default function Register() {
     hasDigit: false,
     hasSpecial: false,
   });
+  const [tokenStatus, setTokenStatus] = useState<
+    "checking" | "valid" | "invalid"
+  >("checking");
+
+  useEffect(() => {
+    if (token) {
+      // VULNERABILITY: No validation of token before proceeding
+      // An attacker could pass any string as token and get a password reset form
+      setTokenStatus("valid");
+    }
+  }, [token]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -28,8 +41,8 @@ export default function Register() {
       [name]: value,
     });
 
-    // Live password validation
-    if (name === "password") {
+    // Live password validation (same as secure, for demo consistency)
+    if (name === "newPassword") {
       setPasswordValidation({
         minLength: value.length >= 10,
         hasUppercase: /[A-Z]/.test(value),
@@ -44,36 +57,54 @@ export default function Register() {
     e.preventDefault();
     setMessage("");
     setErrors([]);
+    setIsLoading(true);
+
+    if (!token) {
+      setMessage("✗ Invalid reset link");
+      setIsLoading(false);
+      return;
+    }
 
     try {
-      const res = await fetch("/api/auth/register", {
+      // VULNERABILITY: XSS risk - Token from URL not sanitized
+      // If attacker crafts: /reset-password?token=<img src=x onerror='alert(1)'>
+      // The formData.newPassword could be affected if API echoes back token in response
+      const res = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          token, // VULNERABILITY: Token passed unsanitized to API
+          newPassword: formData.newPassword,
+          confirmPassword: formData.confirmPassword,
+        }),
       });
 
       const data = await res.json();
 
       if (data.success) {
-        setMessage("✓ Registration successful! Redirecting to login...");
+        // VULNERABILITY: User input from API response directly rendered
+        // If API returns: { message: "Password reset for <user input>" }
+        // This creates stored XSS vulnerability
+        setMessage("✓ Password reset successfully! Redirecting to login...");
         setFormData({
-          username: "",
-          email: "",
-          firstName: "",
-          lastName: "",
-          phone: "",
-          password: "",
+          newPassword: "",
           confirmPassword: "",
         });
         setTimeout(() => {
-          window.location.href = "/login";
+          router.push("/login");
         }, 2000);
       } else {
-        setMessage("✗ " + data.message);
-        if (data.errors) setErrors(data.errors);
+        // VULNERABILITY: User input from API response not HTML-escaped
+        // Directly setting message from response could allow XSS
+        setMessage("✗ " + data.message); // VULNERABLE: No sanitization
+        if (data.errors) setErrors(data.errors); // VULNERABLE: No sanitization of errors array
+        setTokenStatus("invalid");
       }
     } catch (error: any) {
-      setMessage("✗ Error: " + error.message);
+      // VULNERABILITY: Error messages might leak sensitive info
+      setMessage("✗ Error: " + error.message); // Shows raw error details
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -84,76 +115,49 @@ export default function Register() {
     passwordValidation.hasDigit &&
     passwordValidation.hasSpecial;
 
+  if (tokenStatus === "checking") {
+    return (
+      <div style={styles.container}>
+        <div style={styles.card}>
+          <p>Validating reset link...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (tokenStatus === "invalid") {
+    return (
+      <div style={styles.container}>
+        <div style={styles.card}>
+          <h1>Reset Password - Communication_LTD</h1>
+          <p style={{ color: "red" }}>
+            Invalid or expired reset link. Please request a new one.
+          </p>
+          <Link href="/forgot-password">Request new reset link</Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1>Register - Communication_LTD</h1>
-        <p style={styles.secure}>✓ SECURE VERSION - Production Ready</p>
+        <h1>Reset Password - Communication_LTD</h1>
+        <p style={styles.vulnerable}>
+          ⚠ VULNERABLE VERSION - Security Flaws Demonstrated
+        </p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.section}>
-            <h3>Account Information</h3>
-            <input
-              type="text"
-              name="username"
-              placeholder="Username"
-              value={formData.username}
-              onChange={handleChange}
-              required
-              style={styles.input}
-            />
-
-            <input
-              type="email"
-              name="email"
-              placeholder="Email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              style={styles.input}
-            />
-          </div>
-
-          <div style={styles.section}>
-            <h3>Personal Information</h3>
-            <input
-              type="text"
-              name="firstName"
-              placeholder="First Name (optional)"
-              value={formData.firstName}
-              onChange={handleChange}
-              style={styles.input}
-            />
-
-            <input
-              type="text"
-              name="lastName"
-              placeholder="Last Name (optional)"
-              value={formData.lastName}
-              onChange={handleChange}
-              style={styles.input}
-            />
-
-            <input
-              type="tel"
-              name="phone"
-              placeholder="Phone (optional)"
-              value={formData.phone}
-              onChange={handleChange}
-              style={styles.input}
-            />
-          </div>
-
-          <div style={styles.section}>
-            <h3>Password</h3>
             <input
               type="password"
-              name="password"
-              placeholder="Password"
-              value={formData.password}
+              name="newPassword"
+              placeholder="New Password"
+              value={formData.newPassword}
               onChange={handleChange}
               required
               style={styles.input}
+              disabled={isLoading}
             />
 
             <div style={styles.passwordRequirements}>
@@ -200,17 +204,18 @@ export default function Register() {
                 {passwordValidation.hasSpecial ? "✓" : "✗"} Special character
               </div>
             </div>
-
-            <input
-              type="password"
-              name="confirmPassword"
-              placeholder="Confirm Password"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              required
-              style={styles.input}
-            />
           </div>
+
+          <input
+            type="password"
+            name="confirmPassword"
+            placeholder="Confirm New Password"
+            value={formData.confirmPassword}
+            onChange={handleChange}
+            required
+            style={styles.input}
+            disabled={isLoading}
+          />
 
           <button
             type="submit"
@@ -219,9 +224,9 @@ export default function Register() {
               opacity: isPasswordValid ? 1 : 0.5,
               cursor: isPasswordValid ? "pointer" : "not-allowed",
             }}
-            disabled={!isPasswordValid}
+            disabled={!isPasswordValid || isLoading}
           >
-            Register
+            {isLoading ? "Resetting Password..." : "Reset Password"}
           </button>
         </form>
 
@@ -232,6 +237,7 @@ export default function Register() {
               color: message.includes("✓") ? "green" : "red",
             }}
           >
+            {/* VULNERABILITY: XSS - User input from API not sanitized */}
             {message}
           </div>
         )}
@@ -240,19 +246,20 @@ export default function Register() {
           <div style={styles.errors}>
             {errors.map((err, i) => (
               <p key={i} style={{ margin: "5px 0" }}>
-                • {err}
+                {/* VULNERABILITY: XSS - Error messages not sanitized */}• {err}
               </p>
             ))}
           </div>
         )}
 
         <p style={styles.link}>
-          Already have an account? <Link href="/login">Login here</Link>
+          <Link href="/login">Back to Login</Link>
         </p>
 
         <p style={styles.note}>
-          🟢 SECURE: Passwords hashed with bcryptjs. Parameterized queries
-          prevent SQL injection. Password history tracked to prevent reuse.
+          🔴 VULNERABLE: No token expiry enforcement. No password history check.
+          Token not in database. SQL Injection in backend allows attacker to
+          reset any user's password. XSS in error messages.
         </p>
       </div>
     </div>
@@ -273,11 +280,11 @@ const styles = {
     padding: "40px",
     borderRadius: "8px",
     boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-    maxWidth: "600px",
+    maxWidth: "500px",
     width: "100%",
   },
-  secure: {
-    color: "#2e7d32",
+  vulnerable: {
+    color: "#d32f2f",
     fontWeight: "bold" as const,
     marginBottom: "20px",
   },
@@ -299,7 +306,7 @@ const styles = {
   },
   passwordRequirements: {
     padding: "10px",
-    backgroundColor: "#f9f9f9",
+    backgroundColor: "#fff3e0",
     borderRadius: "4px",
     fontSize: "12px",
   },
@@ -309,7 +316,7 @@ const styles = {
   },
   button: {
     padding: "10px",
-    backgroundColor: "#2e7d32",
+    backgroundColor: "#d32f2f",
     color: "white",
     border: "none",
     borderRadius: "4px",
@@ -321,6 +328,7 @@ const styles = {
     padding: "10px",
     borderRadius: "4px",
     backgroundColor: "#f0f0f0",
+    textAlign: "center" as const,
   },
   errors: {
     marginTop: "15px",
@@ -337,9 +345,9 @@ const styles = {
   note: {
     marginTop: "20px",
     padding: "15px",
-    backgroundColor: "#e8f5e9",
+    backgroundColor: "#ffebee",
     borderRadius: "4px",
     fontSize: "12px",
-    borderLeft: "4px solid #2e7d32",
+    borderLeft: "4px solid #d32f2f",
   },
 };
