@@ -133,6 +133,103 @@ export function buildSecureCustomerQuery(): string {
           VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`;
 }
 
+/**
+ * SECURE: Check if password is in weak password dictionary
+ * SECURITY: Dictionary attack prevention
+ */
+export function checkPasswordDictionary(password: string): {
+  isWeak: boolean;
+  suggestion?: string;
+} {
+  try {
+    const { getPasswordConfig, isWeakPassword } = require("./passwordConfig");
+    const config = getPasswordConfig();
+
+    if (config.dictionaryCheckEnabled && isWeakPassword(password)) {
+      return {
+        isWeak: true,
+        suggestion:
+          "This password is too common. Please choose a more unique password.",
+      };
+    }
+  } catch (error) {
+    console.warn("Could not check password dictionary:", error);
+  }
+
+  return { isWeak: false };
+}
+
+/**
+ * SECURE: Validate password hasn't been used in last N times
+ * SECURITY: Prevents password reuse attacks
+ */
+export async function validatePasswordHistory(
+  userId: number,
+  password: string,
+  db: any,
+): Promise<{ valid: boolean; reason?: string }> {
+  try {
+    const { getPasswordConfig } = require("./passwordConfig");
+    const config = getPasswordConfig();
+
+    const userQuery = `SELECT password_history FROM Users WHERE id = ?`;
+    const result = await db.get(userQuery, [userId]);
+
+    if (!result || !result.password_history) {
+      return { valid: true };
+    }
+
+    const passwordHashes: string[] = JSON.parse(
+      result.password_history || "[]",
+    );
+
+    for (const oldHash of passwordHashes) {
+      const isMatch = await comparePasswordsSecure(password, oldHash);
+      if (isMatch) {
+        return {
+          valid: false,
+          reason: `Cannot reuse a password from the last ${config.passwordHistory} times.`,
+        };
+      }
+    }
+
+    return { valid: true };
+  } catch (error) {
+    console.error("Error validating password history:", error);
+    return { valid: true };
+  }
+}
+
+/**
+ * SECURE: Add current password to user's password history
+ * SECURITY: Track previous passwords for reuse validation
+ */
+export async function addToPasswordHistory(
+  userId: number,
+  passwordHash: string,
+  db: any,
+): Promise<void> {
+  try {
+    const { getPasswordConfig } = require("./passwordConfig");
+    const config = getPasswordConfig();
+
+    const userQuery = `SELECT password_history FROM Users WHERE id = ?`;
+    const result = await db.get(userQuery, [userId]);
+
+    const passwordHistory: string[] = result
+      ? JSON.parse(result.password_history || "[]")
+      : [];
+
+    passwordHistory.unshift(passwordHash);
+    const trimmedHistory = passwordHistory.slice(0, config.passwordHistory);
+
+    const updateQuery = `UPDATE Users SET password_history = ? WHERE id = ?`;
+    await db.run(updateQuery, [JSON.stringify(trimmedHistory), userId]);
+  } catch (error) {
+    console.error("Error adding to password history:", error);
+  }
+}
+
 export default {
   generateSalt,
   hashPasswordSecure,

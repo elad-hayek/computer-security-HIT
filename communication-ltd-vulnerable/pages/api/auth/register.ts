@@ -5,6 +5,7 @@ import {
   hashPasswordVulnerable,
   generateSalt,
 } from "@/lib/auth";
+import { getPasswordConfig, isWeakPassword } from "@/lib/passwordConfig";
 
 type ResponseData = {
   success: boolean;
@@ -46,15 +47,8 @@ export default async function handler(
       .json({ success: false, message: "Passwords do not match" });
   }
 
-  // Get password policy from environment
-  const config = {
-    minLength: parseInt(process.env.CONFIG_PASSWORD_MIN_LENGTH || "10"),
-    requireUppercase: process.env.CONFIG_PASSWORD_REQUIRE_UPPERCASE === "true",
-    requireLowercase: process.env.CONFIG_PASSWORD_REQUIRE_LOWERCASE === "true",
-    requireDigits: process.env.CONFIG_PASSWORD_REQUIRE_DIGITS === "true",
-    requireSpecialChars:
-      process.env.CONFIG_PASSWORD_REQUIRE_SPECIAL_CHARS === "true",
-  };
+  // Get password policy from config file
+  const config = getPasswordConfig();
 
   // Validate password policy
   const validation = validatePasswordPolicy(password, config);
@@ -63,6 +57,15 @@ export default async function handler(
       success: false,
       message: "Password does not meet requirements",
       errors: validation.errors,
+    });
+  }
+
+  // VULNERABLE: Shows dictionary check but API doesn't encode output (form does XSS)
+  if (config.dictionaryCheckEnabled && isWeakPassword(password)) {
+    return res.status(400).json({
+      success: false,
+      message: "Password is too common. Please choose a more unique password.",
+      errors: ["WEAK_PASSWORD"],
     });
   }
 

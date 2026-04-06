@@ -6,6 +6,8 @@ import {
   comparePasswordsSecure,
   generateSalt,
 } from "@/lib/auth";
+import { getPasswordConfig, isWeakPassword } from "@/lib/passwordConfig";
+import { escape as htmlEscape } from "html-escaper";
 
 type ResponseData = {
   success: boolean;
@@ -39,13 +41,13 @@ export default async function handler(
   if (!username || !email || !password || !confirmPassword) {
     return res
       .status(400)
-      .json({ success: false, message: "Missing required fields" });
+      .json({ success: false, message: htmlEscape("Missing required fields") });
   }
 
   if (password !== confirmPassword) {
     return res
       .status(400)
-      .json({ success: false, message: "Passwords do not match" });
+      .json({ success: false, message: htmlEscape("Passwords do not match") });
   }
 
   // Validate email format
@@ -53,26 +55,28 @@ export default async function handler(
   if (!emailRegex.test(email)) {
     return res
       .status(400)
-      .json({ success: false, message: "Invalid email format" });
+      .json({ success: false, message: htmlEscape("Invalid email format") });
   }
 
-  // Get password policy from environment
-  const config = {
-    minLength: parseInt(process.env.CONFIG_PASSWORD_MIN_LENGTH || "10"),
-    requireUppercase: process.env.CONFIG_PASSWORD_REQUIRE_UPPERCASE === "true",
-    requireLowercase: process.env.CONFIG_PASSWORD_REQUIRE_LOWERCASE === "true",
-    requireDigits: process.env.CONFIG_PASSWORD_REQUIRE_DIGITS === "true",
-    requireSpecialChars:
-      process.env.CONFIG_PASSWORD_REQUIRE_SPECIAL_CHARS === "true",
-  };
+  // Get password policy from config file
+  const config = getPasswordConfig();
 
   // Validate password policy
   const validation = validatePasswordPolicy(password, config);
   if (!validation.valid) {
     return res.status(400).json({
       success: false,
-      message: "Password does not meet requirements",
+      message: htmlEscape("Password does not meet requirements"),
       errors: validation.errors,
+    });
+  }
+
+  // SECURE: Check weak password dictionary
+  if (config.dictionaryCheckEnabled && isWeakPassword(password)) {
+    return res.status(400).json({
+      success: false,
+      message: htmlEscape("Password is too common. Please choose a more unique password."),
+      errors: ["WEAK_PASSWORD"]
     });
   }
 

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection } from "@/lib/db";
 import { comparePasswordsSecure } from "@/lib/auth";
+import { getPasswordConfig } from "@/lib/passwordConfig";
 
 type ResponseData = {
   success: boolean;
@@ -58,7 +59,8 @@ export default async function handler(
     const user = userResult;
 
     // SECURE: Check if account is locked
-    const maxAttempts = parseInt(process.env.CONFIG_MAX_LOGIN_ATTEMPTS || "3");
+    const config = getPasswordConfig();
+    const maxAttempts = config.maxLoginAttempts;
     if (user.locked_until && new Date(user.locked_until) > new Date()) {
       return res.status(403).json({
         success: false,

@@ -1,3 +1,18 @@
+/**
+ * VULNERABLE: Stored XSS Demonstration
+ *
+ * VULNERABILITY: This form displays error messages without HTML encoding
+ *
+ * XSS ATTACK EXAMPLE (Stored XSS):
+ * If an attacker enters this as username:
+ * <img src=x onerror="alert('Stored XSS on ' + document.domain)">
+ *
+ * And this payload gets stored in database, then displayed here
+ * without htmlEncode(), the JavaScript will execute in every user's browser.
+ *
+ * FIX: Use htmlEncode() when displaying user data, or let React JSX auto-escape
+ */
+
 import { useState } from "react";
 
 export default function Register() {

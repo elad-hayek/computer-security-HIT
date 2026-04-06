@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection } from "@/lib/db";
 import { hashPasswordVulnerable, comparePasswordsVulnerable } from "@/lib/auth";
+import { getPasswordConfig } from "@/lib/passwordConfig";
 
 type ResponseData = {
   success: boolean;
@@ -56,6 +57,9 @@ export default async function handler(
   try {
     // VULNERABLE: Plain text password (from vulnerable registration)
     const passwordHash = hashPasswordVulnerable(password, "");
+
+    // Load config for demonstration (but not enforced in vulnerable version)
+    const config = getPasswordConfig();
 
     // VULNERABLE: Build query with string concatenation
     // This allows SQL injection!
