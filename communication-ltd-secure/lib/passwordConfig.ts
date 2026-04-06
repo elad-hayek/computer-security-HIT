@@ -22,7 +22,7 @@ const DEFAULT_CONFIG: PasswordConfig = {
   passwordHistory: 3,
   maxLoginAttempts: 3,
   dictionaryCheckEnabled: true,
-  dictionaryFilePath: "../data/common-passwords.txt",
+  dictionaryFilePath: "../wordlists/common-passwords.txt",
 };
 
 let cachedConfig: PasswordConfig | null = null;
