@@ -262,4 +262,7 @@ export async function transactionSecure(
   }
 }
 
+// Export async wrapper functions for direct database operations
+export { getAsync as get, runAsync as run, allAsync as all };
+
 export default { getConnection, closeConnection, testConnection, querySecure };

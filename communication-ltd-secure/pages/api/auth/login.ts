@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection } from "@/lib/db";
+import { getConnection, get, run } from "@/lib/db";
 import { comparePasswordsSecure } from "@/lib/auth";
 import { getPasswordConfig } from "@/lib/passwordConfig";
 
@@ -46,7 +46,7 @@ export default async function handler(
 
     // SECURE: First query - find user by username only (parameterized)
     const userQuery = `SELECT id, username, email, password_hash, login_attempts, locked_until FROM Users WHERE username = ?`;
-    const userResult = await db.get(userQuery, [username]);
+    const userResult = await get(db, userQuery, [username]);
 
     if (!userResult) {
       // SECURE: Generic error message (no username enumeration)
@@ -87,7 +87,7 @@ export default async function handler(
 
       // Update failed attempts (parameterized)
       const updateQuery = `UPDATE Users SET login_attempts = ?, locked_until = ? WHERE id = ?`;
-      await db.run(updateQuery, [newAttempts, lockedUntil, user.id]);
+      await run(db, updateQuery, [newAttempts, lockedUntil, user.id]);
 
       // SECURE: Generic error message
       return res.status(401).json({
@@ -98,7 +98,7 @@ export default async function handler(
 
     // SECURE: Reset login attempts on successful login
     const resetQuery = `UPDATE Users SET login_attempts = 0, locked_until = NULL WHERE id = ?`;
-    await db.run(resetQuery, [user.id]);
+    await run(db, resetQuery, [user.id]);
 
     return res.status(200).json({
       success: true,
