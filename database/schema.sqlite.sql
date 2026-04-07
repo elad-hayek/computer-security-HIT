@@ -88,7 +88,7 @@ VALUES (
     'Test',
     'User',
     '+1234567890',
-    '-- THIS WOULD BE HASHED --',
+    'THIS WOULD BE HASHED',
     'random-salt-value',
     CURRENT_TIMESTAMP
 );

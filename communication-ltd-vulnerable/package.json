@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "db:init": "ts-node ../database/init-db.ts",
+    "db:init": "node scripts/init-db.cjs",
     "db:reset": "rm -f data/communication_ltd.db && npm run db:init"
   },
   "dependencies": {
@@ -16,7 +16,7 @@
     "next": "^15",
     "react": "^18",
     "react-dom": "^18",
-    "sqlite": "^5.1.1"
+    "sqlite3": "^5.1.1"
   },
   "devDependencies": {
     "@types/node": "^20",

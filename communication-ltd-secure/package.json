@@ -7,14 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "db:init": "ts-node ../database/init-db.ts",
+    "db:init": "node scripts/init-db.cjs",
     "db:reset": "rm -f data/communication_ltd.db && npm run db:init"
   },
   "dependencies": {
     "react": "^18",
     "react-dom": "^18",
     "next": "^15",
-    "sqlite": "^5.0.0",
+    "sqlite3": "^5.1.1",
     "bcryptjs": "^2.4.3",
     "html-escaper": "^3.0.0"
   },
