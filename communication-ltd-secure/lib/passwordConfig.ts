@@ -51,16 +51,16 @@ export function loadPasswordConfig(): PasswordConfig {
         try {
           const newConfigData = fs.readFileSync(configPath, "utf-8");
           cachedConfig = JSON.parse(newConfigData) as PasswordConfig;
-          console.log("✓ Password config reloaded from file");
+          console.log("Password config reloaded from file");
         } catch (error) {
-          console.error("✗ Failed to reload password config:", error);
+          console.error("Failed to reload password config:", error);
         }
       });
     }
 
     return config;
   } catch (error) {
-    console.warn("✗ Failed to load password config, using defaults:", error);
+    console.warn("Failed to load password config, using defaults:", error);
     cachedConfig = { ...DEFAULT_CONFIG };
     return cachedConfig;
   }
@@ -89,10 +89,10 @@ function loadWeakPasswordsList(dictionaryPath: string): void {
       .filter((p) => p.length > 0);
     weakPasswords = new Set(passwords);
     console.log(
-      `✓ Loaded ${weakPasswords.size} weak passwords from dictionary`,
+      `Loaded ${weakPasswords.size} weak passwords from dictionary`,
     );
   } catch (error) {
-    console.warn("✗ Failed to load weak passwords dictionary:", error);
+    console.warn("Failed to load weak passwords dictionary:", error);
   }
 }
 

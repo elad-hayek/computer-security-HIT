@@ -87,7 +87,6 @@ export default async function handler(
       // Update failed attempts (parameterized)
       const updateQuery = `UPDATE Users SET login_attempts = ?, locked_until = ? WHERE id = ?`;
       await db.run(updateQuery, [newAttempts, lockedUntil, user.id]);
-      await updateRequest.query(updateQuery);
 
       // SECURE: Generic error message
       return res.status(401).json({
@@ -97,10 +96,8 @@ export default async function handler(
     }
 
     // SECURE: Reset login attempts on successful login
-    const resetQuery = `UPDATE Users SET login_attempts = 0, locked_until = NULL WHERE id = @id`;
-    const resetRequest = pool.request();
-    resetRequest.input("id", sql.Int, user.id);
-    await resetRequest.query(resetQuery);
+    const resetQuery = `UPDATE Users SET login_attempts = 0, locked_until = NULL WHERE id = ?`;
+    await db.run(resetQuery, [user.id]);
 
     return res.status(200).json({
       success: true,

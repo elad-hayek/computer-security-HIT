@@ -67,9 +67,9 @@ export async function getConnection(): Promise<sqlite3.Database> {
       db = await openDatabase(DB_PATH);
       // Enable foreign keys in SQLite (off by default)
       await runAsync(db, "PRAGMA foreign_keys = ON");
-      console.log("✓ Secure database connected successfully");
+      console.log("Secure database connected successfully");
     } catch (error) {
-      console.error("✗ Database connection failed:", error);
+      console.error("Database connection failed:", error);
       throw error;
     }
   }

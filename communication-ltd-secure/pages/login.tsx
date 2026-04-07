@@ -33,15 +33,15 @@ export default function Login() {
       const data = await res.json();
 
       if (data.success) {
-        setMessage("✓ Login successful! Redirecting...");
+        setMessage("Login successful! Redirecting...");
         setTimeout(() => {
           router.push("/dashboard");
         }, 1500);
       } else {
-        setMessage("✗ " + (data.message || "Login failed"));
+        setMessage(data.message || "Login failed");
       }
     } catch (error: any) {
-      setMessage("✗ Error: " + error.message);
+      setMessage("Error: " + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -85,7 +85,7 @@ export default function Login() {
           <div
             style={{
               ...styles.message,
-              color: message.includes("✓") ? "green" : "red",
+              color: message.includes("Error") ? "red" : "green",
             }}
           >
             {message}
