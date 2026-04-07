@@ -14,6 +14,7 @@ export default function Dashboard() {
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const storedUserId = localStorage.getItem("userId");
@@ -23,19 +24,44 @@ export default function Dashboard() {
     }
 
     setUserId(storedUserId);
-    // In a real app, you would fetch user profile from API
-    // For now, we'll use dummy data to demonstrate the dashboard
-    // TODO: Create /api/user/profile endpoint to fetch actual user data
-    const dummyUser = {
-      username: "demo_user",
-      email: "demo@communication-ltd.com",
-      firstName: "Demo",
-      lastName: "User",
-      phone: "+1-234-567-8900",
-    };
-    setUserInfo(dummyUser);
-    setIsLoading(false);
+    fetchUserProfile(storedUserId);
   }, [router]);
+
+  const fetchUserProfile = async (userId: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await fetch(`/api/user/profile?userId=${userId}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch user profile");
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.user) {
+        setUserInfo({
+          username: data.user.username,
+          email: data.user.email,
+          firstName: data.user.first_name,
+          lastName: data.user.last_name,
+          phone: data.user.phone,
+        });
+      } else {
+        setError("Failed to load user profile");
+      }
+    } catch (err) {
+      console.error("Profile fetch error:", err);
+      setError("Error fetching user profile");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("userId");
@@ -91,10 +117,6 @@ export default function Dashboard() {
                   {userInfo.phone || "Not provided"}
                 </span>
               </div>
-              <div style={styles.detailRow}>
-                <span style={styles.label}>User ID:</span>
-                <span style={styles.value}>{userId}</span>
-              </div>
             </div>
           )}
         </div>
@@ -120,6 +142,10 @@ export default function Dashboard() {
 
         {message && (
           <div style={{ ...styles.message, color: "blue" }}>{message}</div>
+        )}
+
+        {error && (
+          <div style={{ ...styles.message, color: "red" }}>{error}</div>
         )}
 
         <p style={styles.note}>

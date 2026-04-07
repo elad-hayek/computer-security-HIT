@@ -17,6 +17,7 @@ export default function Dashboard() {
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // VULNERABILITY: No session validation - userId could be spoofed
@@ -30,23 +31,49 @@ export default function Dashboard() {
     // VULNERABILITY: No verification that this userId actually owns this session
     // An attacker could change their userId in developer tools to access another user's data
     setUserId(storedUserId);
-
-    // Dummy data - in real vulnerable app, would fetch from API with user input without validation
-    const dummyUser = {
-      username: "demo_user",
-      email: "demo@communication-ltd.com",
-      firstName: "Demo",
-      lastName: "User",
-      phone: "+1-234-567-8900",
-    };
-
-    // VULNERABILITY: If API returns user data with unsanitized HTML/JS, it would execute
-    // Example: If firstName is "<img src=x onerror='alert(1)'>", it would be dangerous
-    // However, React auto-escapes in JSX, so XSS is less of a risk here
-    // But a vulnerable API could still expose user data to wrong users
-    setUserInfo(dummyUser);
-    setIsLoading(false);
+    fetchUserProfile(storedUserId);
   }, [router]);
+
+  const fetchUserProfile = async (userId: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      // VULNERABILITY: If API returns unvalidated user data, could lead to:
+      // 1. Unauthorized access (no SSN/token validation in the endpoint)
+      // 2. XSS if data contains unescaped HTML (though React auto-escapes JSX)
+      // 3. No server-side session check - authentication is only client-side
+      const response = await fetch("/api/user/profile", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userId }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch user profile");
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.user) {
+        setUserInfo({
+          username: data.user.username,
+          email: data.user.email,
+          firstName: data.user.first_name,
+          lastName: data.user.last_name,
+          phone: data.user.phone,
+        });
+      } else {
+        setError("Failed to load user profile");
+      }
+    } catch (err) {
+      console.error("Profile fetch error:", err);
+      setError("Error fetching user profile");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleLogout = () => {
     // VULNERABILITY: No cookie clearing on server side
@@ -145,6 +172,10 @@ export default function Dashboard() {
             {/* VULNERABILITY: Message not sanitized */}
             {message}
           </div>
+        )}
+
+        {error && (
+          <div style={{ ...styles.message, color: "red" }}>{error}</div>
         )}
 
         <p style={styles.note}>

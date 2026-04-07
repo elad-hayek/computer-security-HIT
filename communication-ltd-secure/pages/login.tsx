@@ -37,6 +37,7 @@ export default function Login() {
         setIsError(false);
         setMessage("Login successful! Redirecting...");
         setTimeout(() => {
+          localStorage.setItem("userId", data.userId);
           router.push("/dashboard");
         }, 1500);
       } else {
