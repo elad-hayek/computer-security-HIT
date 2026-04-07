@@ -35,9 +35,10 @@ let fileWatcher: fs.FSWatcher | null = null;
  */
 export function loadPasswordConfig(): PasswordConfig {
   try {
-    const configPath = path.join(__dirname, "../password.config.json");
+    const configPath = path.join(process.cwd(), "password.config.json");
     const configData = fs.readFileSync(configPath, "utf-8");
     const config = JSON.parse(configData) as PasswordConfig;
+    console.log("Password configuration loaded:", config);
     cachedConfig = config;
 
     // Load dictionary file if enabled
@@ -81,16 +82,14 @@ export function getPasswordConfig(): PasswordConfig {
  */
 function loadWeakPasswordsList(dictionaryPath: string): void {
   try {
-    const fullPath = path.join(__dirname, dictionaryPath);
+    const fullPath = path.join(process.cwd(), dictionaryPath);
     const content = fs.readFileSync(fullPath, "utf-8");
     const passwords = content
       .split("\n")
       .map((p) => p.trim().toLowerCase())
       .filter((p) => p.length > 0);
     weakPasswords = new Set(passwords);
-    console.log(
-      `Loaded ${weakPasswords.size} weak passwords from dictionary`,
-    );
+    console.log(`Loaded ${weakPasswords.size} weak passwords from dictionary`);
   } catch (error) {
     console.warn("Failed to load weak passwords dictionary:", error);
   }

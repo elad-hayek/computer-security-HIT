@@ -22,7 +22,7 @@ const DEFAULT_CONFIG: PasswordConfig = {
   passwordHistory: 3,
   maxLoginAttempts: 3,
   dictionaryCheckEnabled: true,
-  dictionaryFilePath: "../wordlists/common-passwords.txt",
+  dictionaryFilePath: "wordlists/common-passwords.txt",
 };
 
 let cachedConfig: PasswordConfig | null = null;
@@ -35,7 +35,7 @@ let fileWatcher: fs.FSWatcher | null = null;
  */
 export function loadPasswordConfig(): PasswordConfig {
   try {
-    const configPath = path.join(__dirname, "../password.config.json");
+    const configPath = path.join(process.cwd(), "password.config.json");
     const configData = fs.readFileSync(configPath, "utf-8");
     const config = JSON.parse(configData) as PasswordConfig;
     cachedConfig = config;
@@ -81,7 +81,7 @@ export function getPasswordConfig(): PasswordConfig {
  */
 function loadWeakPasswordsList(dictionaryPath: string): void {
   try {
-    const fullPath = path.join(__dirname, dictionaryPath);
+    const fullPath = path.join(process.cwd(), dictionaryPath);
     const content = fs.readFileSync(fullPath, "utf-8");
     const passwords = content
       .split("\n")
