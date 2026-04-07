@@ -10,6 +10,7 @@ export default function Login() {
   });
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -33,14 +34,17 @@ export default function Login() {
       const data = await res.json();
 
       if (data.success) {
+        setIsError(false);
         setMessage("Login successful! Redirecting...");
         setTimeout(() => {
           router.push("/dashboard");
         }, 1500);
       } else {
+        setIsError(true);
         setMessage(data.message || "Login failed");
       }
     } catch (error: any) {
+      setIsError(true);
       setMessage("Error: " + error.message);
     } finally {
       setIsLoading(false);
@@ -85,7 +89,7 @@ export default function Login() {
           <div
             style={{
               ...styles.message,
-              color: message.includes("failed") ? "red" : "green",
+              color: isError ? "red" : "green",
             }}
           >
             {message}
