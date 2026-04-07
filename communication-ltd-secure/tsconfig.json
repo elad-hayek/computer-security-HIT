@@ -7,6 +7,9 @@
       "dom",
       "dom.iterable"
     ],
+    "paths":{
+      "@/*": ["./*"]
+    },
     "module": "esnext",
     "skipLibCheck": true,
     "esModuleInterop": true,

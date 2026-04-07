@@ -57,6 +57,7 @@ export default async function handler(
     }
 
     const user = userResult;
+    console.log(`Login attempt for user '${JSON.stringify(user)}'`);
 
     // SECURE: Check if account is locked
     const config = getPasswordConfig();

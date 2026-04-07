@@ -78,7 +78,7 @@ CREATE INDEX IF NOT EXISTS IDX_PasswordResetTokens_TokenHash ON PasswordResetTok
 -- =============================================
 -- Sample Data (Optional - Remove for production)
 -- =============================================
--- Example user: username=testuser, password (plain for reference only): TestPass123!
+-- Example user: username=testuser, password (plain for reference only): TestPass123
 -- In real scenario, password_hash would contain bcryptjs hash
 INSERT OR IGNORE INTO Users (id, username, email, first_name, last_name, phone, password_hash, salt, created_date)
 VALUES (
@@ -88,8 +88,8 @@ VALUES (
     'Test',
     'User',
     '+1234567890',
-    'THIS WOULD BE HASHED',
-    'random-salt-value',
+    '$2b$12$CuSprHMc3tpnjTB8pfhjmuSNggTR/28AqTyQsix3NbM61nCtFzQuy',
+    'CuSprHMc3tpnjTB8pfhjmu',
     CURRENT_TIMESTAMP
 );
 

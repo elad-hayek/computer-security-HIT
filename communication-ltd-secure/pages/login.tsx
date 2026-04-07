@@ -85,7 +85,7 @@ export default function Login() {
           <div
             style={{
               ...styles.message,
-              color: message.includes("Error") ? "red" : "green",
+              color: message.includes("failed") ? "red" : "green",
             }}
           >
             {message}
