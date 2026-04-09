@@ -1,7 +1,9 @@
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/router";
 
 export default function Register() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     username: "",
     email: "",
@@ -66,7 +68,7 @@ export default function Register() {
           confirmPassword: "",
         });
         setTimeout(() => {
-          window.location.href = "/login";
+          router.push("/login");
         }, 2000);
       } else {
         setMessage("✗ " + data.message);
@@ -158,47 +160,11 @@ export default function Register() {
 
             <div style={styles.passwordRequirements}>
               <p style={{ margin: "5px 0" }}>Password Requirements:</p>
-              <div
-                style={{
-                  ...styles.requirement,
-                  color: passwordValidation.minLength ? "green" : "gray",
-                }}
-              >
-                {passwordValidation.minLength ? "✓" : "✗"} At least 10
-                characters
-              </div>
-              <div
-                style={{
-                  ...styles.requirement,
-                  color: passwordValidation.hasUppercase ? "green" : "gray",
-                }}
-              >
-                {passwordValidation.hasUppercase ? "✓" : "✗"} Uppercase letter
-              </div>
-              <div
-                style={{
-                  ...styles.requirement,
-                  color: passwordValidation.hasLowercase ? "green" : "gray",
-                }}
-              >
-                {passwordValidation.hasLowercase ? "✓" : "✗"} Lowercase letter
-              </div>
-              <div
-                style={{
-                  ...styles.requirement,
-                  color: passwordValidation.hasDigit ? "green" : "gray",
-                }}
-              >
-                {passwordValidation.hasDigit ? "✓" : "✗"} Digit
-              </div>
-              <div
-                style={{
-                  ...styles.requirement,
-                  color: passwordValidation.hasSpecial ? "green" : "gray",
-                }}
-              >
-                {passwordValidation.hasSpecial ? "✓" : "✗"} Special character
-              </div>
+              <div style={styles.requirement}>At least 10 characters</div>
+              <div style={styles.requirement}>Uppercase letter</div>
+              <div style={styles.requirement}>Lowercase letter</div>
+              <div style={styles.requirement}>Digit</div>
+              <div style={styles.requirement}>Special character</div>
             </div>
 
             <input
