@@ -1,6 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
+
+interface PasswordConfig {
+  minLength: number;
+  requireUppercase: boolean;
+  requireLowercase: boolean;
+  requireDigits: boolean;
+  requireSpecialChars: boolean;
+}
 
 export default function Register() {
   const router = useRouter();
@@ -15,6 +23,13 @@ export default function Register() {
   });
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
+  const [passwordConfig, setPasswordConfig] = useState<PasswordConfig>({
+    minLength: 10,
+    requireUppercase: true,
+    requireLowercase: true,
+    requireDigits: true,
+    requireSpecialChars: true,
+  });
   const [passwordValidation, setPasswordValidation] = useState({
     minLength: false,
     hasUppercase: false,
@@ -22,6 +37,23 @@ export default function Register() {
     hasDigit: false,
     hasSpecial: false,
   });
+
+  useEffect(() => {
+    // Fetch password config from backend
+    const fetchPasswordConfig = async () => {
+      try {
+        const res = await fetch("/api/config/password");
+        const data = await res.json();
+        if (data.success && data.config) {
+          setPasswordConfig(data.config);
+        }
+      } catch (error) {
+        console.error("Failed to fetch password config:", error);
+      }
+    };
+
+    fetchPasswordConfig();
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -33,7 +65,7 @@ export default function Register() {
     // Live password validation
     if (name === "password") {
       setPasswordValidation({
-        minLength: value.length >= 10,
+        minLength: value.length >= passwordConfig.minLength,
         hasUppercase: /[A-Z]/.test(value),
         hasLowercase: /[a-z]/.test(value),
         hasDigit: /\d/.test(value),
@@ -57,7 +89,7 @@ export default function Register() {
       const data = await res.json();
 
       if (data.success) {
-        setMessage("✓ Registration successful! Redirecting to login...");
+        setMessage("Registration successful! Redirecting to login...");
         setFormData({
           username: "",
           email: "",
@@ -71,26 +103,32 @@ export default function Register() {
           router.push("/login");
         }, 2000);
       } else {
-        setMessage("✗ " + data.message);
+        setMessage(data.message);
         if (data.errors) setErrors(data.errors);
       }
     } catch (error: any) {
-      setMessage("✗ Error: " + error.message);
+      setMessage("Error: " + error.message);
     }
   };
 
-  const isPasswordValid =
-    passwordValidation.minLength &&
-    passwordValidation.hasUppercase &&
-    passwordValidation.hasLowercase &&
-    passwordValidation.hasDigit &&
-    passwordValidation.hasSpecial;
+  const isPasswordValid = (() => {
+    if (passwordConfig.minLength && !passwordValidation.minLength) return false;
+    if (passwordConfig.requireUppercase && !passwordValidation.hasUppercase)
+      return false;
+    if (passwordConfig.requireLowercase && !passwordValidation.hasLowercase)
+      return false;
+    if (passwordConfig.requireDigits && !passwordValidation.hasDigit)
+      return false;
+    if (passwordConfig.requireSpecialChars && !passwordValidation.hasSpecial)
+      return false;
+    return true;
+  })();
 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
         <h1>Register - Communication_LTD</h1>
-        <p style={styles.secure}>✓ SECURE VERSION - Production Ready</p>
+        <p style={styles.secure}>SECURE VERSION - Production Ready</p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.section}>
@@ -160,11 +198,23 @@ export default function Register() {
 
             <div style={styles.passwordRequirements}>
               <p style={{ margin: "5px 0" }}>Password Requirements:</p>
-              <div style={styles.requirement}>At least 10 characters</div>
-              <div style={styles.requirement}>Uppercase letter</div>
-              <div style={styles.requirement}>Lowercase letter</div>
-              <div style={styles.requirement}>Digit</div>
-              <div style={styles.requirement}>Special character</div>
+              {passwordConfig.minLength > 0 && (
+                <div style={styles.requirement}>
+                  At least {passwordConfig.minLength} characters
+                </div>
+              )}
+              {passwordConfig.requireUppercase && (
+                <div style={styles.requirement}>Uppercase letter</div>
+              )}
+              {passwordConfig.requireLowercase && (
+                <div style={styles.requirement}>Lowercase letter</div>
+              )}
+              {passwordConfig.requireDigits && (
+                <div style={styles.requirement}>Digit</div>
+              )}
+              {passwordConfig.requireSpecialChars && (
+                <div style={styles.requirement}>Special character</div>
+              )}
             </div>
 
             <input
@@ -195,7 +245,7 @@ export default function Register() {
           <div
             style={{
               ...styles.message,
-              color: message.includes("✓") ? "green" : "red",
+              color: message.includes("successful") ? "green" : "red",
             }}
           >
             {message}
@@ -217,8 +267,8 @@ export default function Register() {
         </p>
 
         <p style={styles.note}>
-          🟢 SECURE: Passwords hashed with bcryptjs. Parameterized queries
-          prevent SQL injection. Password history tracked to prevent reuse.
+          SECURE: Passwords hashed with bcryptjs. Parameterized queries prevent
+          SQL injection. Password history tracked to prevent reuse.
         </p>
       </div>
     </div>
