@@ -15,6 +15,7 @@ export default function ResetPassword() {
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [passwordValidation, setPasswordValidation] = useState({
     minLength: false,
     hasUppercase: false,
@@ -60,7 +61,8 @@ export default function ResetPassword() {
     setIsLoading(true);
 
     if (!token) {
-      setMessage("✗ Invalid reset link");
+      setSuccess(false);
+      setMessage("Invalid reset link");
       setIsLoading(false);
       return;
     }
@@ -85,7 +87,8 @@ export default function ResetPassword() {
         // VULNERABILITY: User input from API response directly rendered
         // If API returns: { message: "Password reset for <user input>" }
         // This creates stored XSS vulnerability
-        setMessage("✓ Password reset successfully! Redirecting to login...");
+        setSuccess(true);
+        setMessage("Password reset successfully! Redirecting to login...");
         setFormData({
           newPassword: "",
           confirmPassword: "",
@@ -96,13 +99,15 @@ export default function ResetPassword() {
       } else {
         // VULNERABILITY: User input from API response not HTML-escaped
         // Directly setting message from response could allow XSS
-        setMessage("✗ " + data.message); // VULNERABLE: No sanitization
+        setSuccess(false);
+        setMessage(data.message); // VULNERABLE: No sanitization
         if (data.errors) setErrors(data.errors); // VULNERABLE: No sanitization of errors array
         setTokenStatus("invalid");
       }
     } catch (error: any) {
       // VULNERABILITY: Error messages might leak sensitive info
-      setMessage("✗ Error: " + error.message); // Shows raw error details
+      setSuccess(false);
+      setMessage("Error: " + error.message); // Shows raw error details
     } finally {
       setIsLoading(false);
     }
@@ -168,8 +173,7 @@ export default function ResetPassword() {
                   color: passwordValidation.minLength ? "green" : "gray",
                 }}
               >
-                {passwordValidation.minLength ? "✓" : "✗"} At least 10
-                characters
+                At least 10 characters
               </div>
               <div
                 style={{
@@ -177,7 +181,7 @@ export default function ResetPassword() {
                   color: passwordValidation.hasUppercase ? "green" : "gray",
                 }}
               >
-                {passwordValidation.hasUppercase ? "✓" : "✗"} Uppercase letter
+                Uppercase letter
               </div>
               <div
                 style={{
@@ -185,7 +189,7 @@ export default function ResetPassword() {
                   color: passwordValidation.hasLowercase ? "green" : "gray",
                 }}
               >
-                {passwordValidation.hasLowercase ? "✓" : "✗"} Lowercase letter
+                Lowercase letter
               </div>
               <div
                 style={{
@@ -193,7 +197,7 @@ export default function ResetPassword() {
                   color: passwordValidation.hasDigit ? "green" : "gray",
                 }}
               >
-                {passwordValidation.hasDigit ? "✓" : "✗"} Digit
+                Digit
               </div>
               <div
                 style={{
@@ -201,7 +205,7 @@ export default function ResetPassword() {
                   color: passwordValidation.hasSpecial ? "green" : "gray",
                 }}
               >
-                {passwordValidation.hasSpecial ? "✓" : "✗"} Special character
+                Special character
               </div>
             </div>
           </div>
@@ -234,7 +238,7 @@ export default function ResetPassword() {
           <div
             style={{
               ...styles.message,
-              color: message.includes("✓") ? "green" : "red",
+              color: success ? "green" : "red",
             }}
           >
             {/* VULNERABILITY: XSS - User input from API not sanitized */}

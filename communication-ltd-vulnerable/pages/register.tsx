@@ -24,6 +24,7 @@ export default function Register() {
   });
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
+  const [success, setSuccess] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -47,7 +48,8 @@ export default function Register() {
       const data = await res.json();
 
       if (data.success) {
-        setMessage("✓ Registration successful!");
+        setSuccess(true);
+        setMessage("Registration successful!");
         setFormData({
           username: "",
           email: "",
@@ -55,11 +57,13 @@ export default function Register() {
           confirmPassword: "",
         });
       } else {
-        setMessage("✗ " + data.message);
+        setSuccess(false);
+        setMessage(data.message);
         if (data.errors) setErrors(data.errors);
       }
     } catch (error: any) {
-      setMessage("✗ Error: " + error.message);
+      setSuccess(false);
+      setMessage("Error: " + error.message);
     }
   };
 
@@ -121,7 +125,7 @@ export default function Register() {
           <div
             style={{
               ...styles.message,
-              color: message.includes("✓") ? "green" : "red",
+              color: success ? "green" : "red",
             }}
           >
             {message}

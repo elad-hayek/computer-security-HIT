@@ -16,6 +16,7 @@ export default function ChangePassword() {
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [passwordValidation, setPasswordValidation] = useState({
     minLength: false,
     hasUppercase: false,
@@ -58,7 +59,8 @@ export default function ChangePassword() {
     setIsLoading(true);
 
     if (!userId) {
-      setMessage("✗ User not authenticated");
+      setSuccess(false);
+      setMessage("User not authenticated");
       setIsLoading(false);
       return;
     }
@@ -81,7 +83,8 @@ export default function ChangePassword() {
       const data = await res.json();
 
       if (data.success) {
-        setMessage("✓ Password changed successfully! Redirecting...");
+        setSuccess(true);
+        setMessage("Password changed successfully! Redirecting...");
         setFormData({
           oldPassword: "",
           newPassword: "",
@@ -91,11 +94,13 @@ export default function ChangePassword() {
           router.push("/dashboard");
         }, 2000);
       } else {
-        setMessage("✗ " + data.message);
+        setSuccess(false);
+        setMessage(data.message);
         if (data.errors) setErrors(data.errors);
       }
     } catch (error: any) {
-      setMessage("✗ Error: " + error.message);
+      setSuccess(false);
+      setMessage("Error: " + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -154,8 +159,7 @@ export default function ChangePassword() {
                   color: passwordValidation.minLength ? "green" : "gray",
                 }}
               >
-                {passwordValidation.minLength ? "✓" : "✗"} At least 10
-                characters
+                At least 10 characters
               </div>
               <div
                 style={{
@@ -163,7 +167,7 @@ export default function ChangePassword() {
                   color: passwordValidation.hasUppercase ? "green" : "gray",
                 }}
               >
-                {passwordValidation.hasUppercase ? "✓" : "✗"} Uppercase letter
+                Uppercase letter
               </div>
               <div
                 style={{
@@ -171,7 +175,7 @@ export default function ChangePassword() {
                   color: passwordValidation.hasLowercase ? "green" : "gray",
                 }}
               >
-                {passwordValidation.hasLowercase ? "✓" : "✗"} Lowercase letter
+                Lowercase letter
               </div>
               <div
                 style={{
@@ -179,7 +183,7 @@ export default function ChangePassword() {
                   color: passwordValidation.hasDigit ? "green" : "gray",
                 }}
               >
-                {passwordValidation.hasDigit ? "✓" : "✗"} Digit
+                Digit
               </div>
               <div
                 style={{
@@ -187,7 +191,7 @@ export default function ChangePassword() {
                   color: passwordValidation.hasSpecial ? "green" : "gray",
                 }}
               >
-                {passwordValidation.hasSpecial ? "✓" : "✗"} Special character
+                Special character
               </div>
             </div>
           </div>
@@ -220,7 +224,7 @@ export default function ChangePassword() {
           <div
             style={{
               ...styles.message,
-              color: message.includes("✓") ? "green" : "red",
+              color: success ? "green" : "red",
             }}
           >
             {message}

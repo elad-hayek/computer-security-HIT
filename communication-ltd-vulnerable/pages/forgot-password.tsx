@@ -8,6 +8,7 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // VULNERABILITY: No input validation for email
@@ -34,17 +35,21 @@ export default function ForgotPassword() {
       // An attacker can discover valid email addresses in the system
       if (data.success) {
         // Specific success message means this email exists
-        setMessage("✓ Password reset email sent successfully!");
+        setSuccess(true);
+        setMessage("Password reset email sent successfully!");
       } else if (data.message === "Email not found") {
         // Specific error message means email doesn't exist (enumeration!)
-        setMessage("✗ " + data.message); // VULNERABILITY: Reveals user doesn't exist
+        setSuccess(false);
+        setMessage(data.message); // VULNERABILITY: Reveals user doesn't exist
       } else {
-        setMessage("✗ " + data.message);
+        setSuccess(false);
+        setMessage(data.message);
       }
 
       setEmail("");
     } catch (error: any) {
-      setMessage("✗ Error: " + error.message);
+      setSuccess(false);
+      setMessage("Error: " + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -79,7 +84,7 @@ export default function ForgotPassword() {
           <div
             style={{
               ...styles.message,
-              color: message.includes("✓") ? "green" : "red",
+              color: success ? "green" : "red",
             }}
           >
             {/* VULNERABILITY: Message revealing account existence */}

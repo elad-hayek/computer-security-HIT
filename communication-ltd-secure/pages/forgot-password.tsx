@@ -5,6 +5,7 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,12 +21,14 @@ export default function ForgotPassword() {
 
       const data = await res.json();
 
+      setSuccess(true);
       setMessage(
-        "✓ If an account exists with this email, a reset link will be sent.",
+        "If an account exists with this email, a reset link will be sent.",
       );
       setEmail("");
     } catch (error: any) {
-      setMessage("✗ Error: " + error.message);
+      setSuccess(false);
+      setMessage("Error: " + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -35,7 +38,7 @@ export default function ForgotPassword() {
     <div style={styles.container}>
       <div style={styles.card}>
         <h1>Forgot Password - Communication_LTD</h1>
-        <p style={styles.secure}>✓ SECURE VERSION - Production Ready</p>
+        <p style={styles.secure}>SECURE VERSION - Production Ready</p>
 
         <p style={styles.description}>
           Enter your email address and we'll send you a link to reset your
@@ -62,7 +65,7 @@ export default function ForgotPassword() {
           <div
             style={{
               ...styles.message,
-              color: message.includes("✓") ? "green" : "red",
+              color: success ? "green" : "red",
             }}
           >
             {message}

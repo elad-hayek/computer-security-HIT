@@ -13,6 +13,7 @@ export default function Login() {
   });
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -46,7 +47,8 @@ export default function Login() {
 
         // VULNERABILITY: Session ID not stored securely
         // Should be in HttpOnly cookie, not localStorage
-        setMessage("✓ Login successful! Redirecting to dashboard...");
+        setSuccess(true);
+        setMessage("Login successful! Redirecting to dashboard...");
 
         setTimeout(() => {
           router.push("/dashboard");
@@ -54,11 +56,13 @@ export default function Login() {
       } else {
         // VULNERABILITY: Server timing can reveal if username exists (timing attacks)
         // Different response times for "user not found" vs "invalid password"
-        setMessage("✗ " + data.message);
+        setSuccess(false);
+        setMessage(data.message);
       }
     } catch (error: any) {
       // VULNERABILITY: Detailed error messages shown to attackers
-      setMessage("✗ Error: " + error.message);
+      setSuccess(false);
+      setMessage("Error: " + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -106,12 +110,12 @@ export default function Login() {
           <div
             style={{
               ...styles.message,
-              color: message.includes("✓") ? "green" : "red",
+              color: success ? "green" : "red",
             }}
           >
             {/* VULNERABILITY: Message not sanitized */}
             {message}
-          </div>
+          </div
         )}
 
         <div style={styles.links}>

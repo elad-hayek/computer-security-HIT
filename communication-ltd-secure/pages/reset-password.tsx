@@ -2,6 +2,14 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 
+interface PasswordConfig {
+  minLength: number;
+  requireUppercase: boolean;
+  requireLowercase: boolean;
+  requireDigits: boolean;
+  requireSpecialChars: boolean;
+}
+
 export default function ResetPassword() {
   const router = useRouter();
   const { token } = router.query;
@@ -12,6 +20,14 @@ export default function ResetPassword() {
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [passwordConfig, setPasswordConfig] = useState<PasswordConfig>({
+    minLength: 10,
+    requireUppercase: true,
+    requireLowercase: true,
+    requireDigits: true,
+    requireSpecialChars: true,
+  });
   const [passwordValidation, setPasswordValidation] = useState({
     minLength: false,
     hasUppercase: false,
@@ -30,6 +46,23 @@ export default function ResetPassword() {
     }
   }, [token]);
 
+  useEffect(() => {
+    // Fetch password config from backend
+    const fetchPasswordConfig = async () => {
+      try {
+        const res = await fetch("/api/config/password");
+        const data = await res.json();
+        if (data.success && data.config) {
+          setPasswordConfig(data.config);
+        }
+      } catch (error) {
+        console.error("Failed to fetch password config:", error);
+      }
+    };
+
+    fetchPasswordConfig();
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData({
@@ -40,7 +73,7 @@ export default function ResetPassword() {
     // Live password validation
     if (name === "newPassword") {
       setPasswordValidation({
-        minLength: value.length >= 10,
+        minLength: value.length >= passwordConfig.minLength,
         hasUppercase: /[A-Z]/.test(value),
         hasLowercase: /[a-z]/.test(value),
         hasDigit: /\d/.test(value),
@@ -56,7 +89,8 @@ export default function ResetPassword() {
     setIsLoading(true);
 
     if (!token) {
-      setMessage("✗ Invalid reset link");
+      setSuccess(false);
+      setMessage("Invalid reset link");
       setIsLoading(false);
       return;
     }
@@ -75,7 +109,8 @@ export default function ResetPassword() {
       const data = await res.json();
 
       if (data.success) {
-        setMessage("✓ Password reset successfully! Redirecting to login...");
+        setSuccess(true);
+        setMessage("Password reset successfully! Redirecting to login...");
         setFormData({
           newPassword: "",
           confirmPassword: "",
@@ -84,23 +119,31 @@ export default function ResetPassword() {
           router.push("/login");
         }, 2000);
       } else {
-        setMessage("✗ " + data.message);
+        setSuccess(false);
+        setMessage(data.message);
         if (data.errors) setErrors(data.errors);
         setTokenStatus("invalid");
       }
     } catch (error: any) {
-      setMessage("✗ Error: " + error.message);
+      setSuccess(false);
+      setMessage("Error: " + error.message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const isPasswordValid =
-    passwordValidation.minLength &&
-    passwordValidation.hasUppercase &&
-    passwordValidation.hasLowercase &&
-    passwordValidation.hasDigit &&
-    passwordValidation.hasSpecial;
+  const isPasswordValid = (() => {
+    if (passwordConfig.minLength && !passwordValidation.minLength) return false;
+    if (passwordConfig.requireUppercase && !passwordValidation.hasUppercase)
+      return false;
+    if (passwordConfig.requireLowercase && !passwordValidation.hasLowercase)
+      return false;
+    if (passwordConfig.requireDigits && !passwordValidation.hasDigit)
+      return false;
+    if (passwordConfig.requireSpecialChars && !passwordValidation.hasSpecial)
+      return false;
+    return true;
+  })();
 
   if (tokenStatus === "checking") {
     return (
@@ -130,7 +173,7 @@ export default function ResetPassword() {
     <div style={styles.container}>
       <div style={styles.card}>
         <h1>Reset Password - Communication_LTD</h1>
-        <p style={styles.secure}>✓ SECURE VERSION - Production Ready</p>
+        <p style={styles.secure}>SECURE VERSION - Production Ready</p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.section}>
@@ -147,47 +190,57 @@ export default function ResetPassword() {
 
             <div style={styles.passwordRequirements}>
               <p style={{ margin: "5px 0" }}>Password Requirements:</p>
-              <div
-                style={{
-                  ...styles.requirement,
-                  color: passwordValidation.minLength ? "green" : "gray",
-                }}
-              >
-                {passwordValidation.minLength ? "✓" : "✗"} At least 10
-                characters
-              </div>
-              <div
-                style={{
-                  ...styles.requirement,
-                  color: passwordValidation.hasUppercase ? "green" : "gray",
-                }}
-              >
-                {passwordValidation.hasUppercase ? "✓" : "✗"} Uppercase letter
-              </div>
-              <div
-                style={{
-                  ...styles.requirement,
-                  color: passwordValidation.hasLowercase ? "green" : "gray",
-                }}
-              >
-                {passwordValidation.hasLowercase ? "✓" : "✗"} Lowercase letter
-              </div>
-              <div
-                style={{
-                  ...styles.requirement,
-                  color: passwordValidation.hasDigit ? "green" : "gray",
-                }}
-              >
-                {passwordValidation.hasDigit ? "✓" : "✗"} Digit
-              </div>
-              <div
-                style={{
-                  ...styles.requirement,
-                  color: passwordValidation.hasSpecial ? "green" : "gray",
-                }}
-              >
-                {passwordValidation.hasSpecial ? "✓" : "✗"} Special character
-              </div>
+              {passwordConfig.minLength > 0 && (
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.minLength ? "green" : "gray",
+                  }}
+                >
+                  At least
+                  {passwordConfig.minLength} characters
+                </div>
+              )}
+              {passwordConfig.requireUppercase && (
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.hasUppercase ? "green" : "gray",
+                  }}
+                >
+                  Uppercase letter
+                </div>
+              )}
+              {passwordConfig.requireLowercase && (
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.hasLowercase ? "green" : "gray",
+                  }}
+                >
+                  Lowercase letter
+                </div>
+              )}
+              {passwordConfig.requireDigits && (
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.hasDigit ? "green" : "gray",
+                  }}
+                >
+                  Digit
+                </div>
+              )}
+              {passwordConfig.requireSpecialChars && (
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.hasSpecial ? "green" : "gray",
+                  }}
+                >
+                  Special character
+                </div>
+              )}
             </div>
           </div>
 
@@ -219,7 +272,7 @@ export default function ResetPassword() {
           <div
             style={{
               ...styles.message,
-              color: message.includes("✓") ? "green" : "red",
+              color: success ? "green" : "red",
             }}
           >
             {message}
