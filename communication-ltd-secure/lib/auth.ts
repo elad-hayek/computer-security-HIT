@@ -15,14 +15,6 @@ export function generateSalt(): string {
 }
 
 /**
- * SECURE: Generate a cryptographically secure password reset token
- * Returns the token as hex string (should be sent via email)
- */
-export function generatePasswordResetToken(): string {
-  return crypto.randomBytes(32).toString("hex");
-}
-
-/**
  * SECURE: Hash password using bcryptjs
  * WHY THIS IS SECURE:
  * - Uses bcryptjs algorithm (adaptive and slowing)
@@ -104,78 +96,6 @@ export function validatePasswordPolicy(
 }
 
 /**
- * SECURE: Build parameterized login query
- * WHY THIS IS SECURE:
- * - Uses ? placeholders (NOT string concatenation)
- * - SQL Lite separates query structure from data
- * - Any SQL metacharacters in username are treated as literal data
- * - Completely prevents SQL Injection
- *
- * EXAMPLE ATTACK (this won't work):
- * - If username = "admin' OR '1'='1"
- * - Query still looks for exact username = "admin' OR '1'='1"
- * - No SQL injection possible
- *
- * NOTE: This function is kept for documentation but not used anymore
- * The query is built directly in the API endpoints now
- */
-export function buildSecureLoginQuery(): string {
-  return `SELECT * FROM Users WHERE username = ? AND password_hash = ?`;
-}
-
-/**
- * SECURE: Build parameterized register query
- * Parameters passed separately to prevent SQL Injection
- *
- * NOTE: This function is kept for documentation but not used anymore
- */
-export function buildSecureRegisterQuery(): string {
-  return `INSERT INTO Users (username, email, password_hash, salt, created_date) 
-           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`;
-}
-
-/**
- * SECURE: Build parameterized customer query
- * WHY THIS MATTERS:
- * - firstName, lastName, phone, email, sector are parameterized
- * - No XSS on stored data (even if someone tries to inject HTML)
- * - Data is stored as literal text, not as executable code
- * - When displayed, React automatically escapes HTML characters
- *
- * NOTE: This function is kept for documentation but not used anymore
- */
-export function buildSecureCustomerQuery(): string {
-  return `INSERT INTO Customers (user_id, first_name, last_name, phone, email, sector, subscription_package, created_date) 
-          VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`;
-}
-
-/**
- * SECURE: Check if password is in weak password dictionary
- * SECURITY: Dictionary attack prevention
- */
-export function checkPasswordDictionary(password: string): {
-  isWeak: boolean;
-  suggestion?: string;
-} {
-  try {
-    const { getPasswordConfig, isWeakPassword } = require("./passwordConfig");
-    const config = getPasswordConfig();
-
-    if (config.dictionaryCheckEnabled && isWeakPassword(password)) {
-      return {
-        isWeak: true,
-        suggestion:
-          "This password is too common. Please choose a more unique password.",
-      };
-    }
-  } catch (error) {
-    console.warn("Could not check password dictionary:", error);
-  }
-
-  return { isWeak: false };
-}
-
-/**
  * SECURE: Check password history - verify new password isn't in last N passwords
  * SECURITY: Prevents password reuse attacks
  * Uses PasswordHistory table with individual rows per password for better queryability
@@ -236,48 +156,11 @@ export async function addPasswordToHistory(
   }
 }
 
-/**
- * SECURITY: Legacy validation function for password policy
- * Kept for backward compatibility but deprecated - use validatePasswordPolicy instead
- */
-export async function validatePasswordHistory(
-  userId: number,
-  password: string,
-  db: any,
-): Promise<{ valid: boolean; reason?: string }> {
-  try {
-    const { getPasswordConfig } = require("./passwordConfig");
-    const config = getPasswordConfig();
-    return checkPasswordHistory(userId, password, db, config);
-  } catch (error) {
-    console.error("Error validating password history:", error);
-    return { valid: true };
-  }
-}
-
-/**
- * SECURITY: Legacy function for backward compatibility
- * Use addPasswordToHistory instead
- */
-export async function addToPasswordHistory(
-  userId: number,
-  passwordHash: string,
-  db: any,
-): Promise<void> {
-  return addPasswordToHistory(userId, passwordHash, db);
-}
-
 export default {
   generateSalt,
-  generatePasswordResetToken,
   hashPasswordSecure,
   comparePasswordsSecure,
   validatePasswordPolicy,
   checkPasswordHistory,
   addPasswordToHistory,
-  buildSecureLoginQuery,
-  buildSecureRegisterQuery,
-  buildSecureCustomerQuery,
-  validatePasswordHistory,
-  addToPasswordHistory,
 };
