@@ -4,14 +4,6 @@
 import crypto from "crypto";
 
 /**
- * VULNERABLE: Generate a "salt" but it's not actually used securely
- * Returns a random value but won't prevent attacks
- */
-export function generateSalt(): string {
-  return crypto.randomBytes(16).toString("hex");
-}
-
-/**
  * VULNERABLE: Generate password reset token without proper protection
  */
 export function generatePasswordResetToken(): string {
@@ -33,7 +25,7 @@ export function generatePasswordResetToken(): string {
  * - Impersonate users
  * - Access sensitive customer information
  */
-export function hashPasswordVulnerable(password: string, salt: string): string {
+export function hashPasswordVulnerable(password: string): string {
   // VULNERABLE: Return plain text password
   return password;
 }
@@ -118,11 +110,10 @@ export function buildVulnerableRegisterQuery(
   username: string,
   email: string,
   passwordHash: string,
-  salt: string,
 ): string {
   // VULNERABLE: Direct string concatenation
   // Attack example: username = "' OR '1'='1'; DROP TABLE Users; --"
-  return `INSERT INTO Users (username, email, password_hash, salt, created_date) VALUES ('${username}', '${email}', '${passwordHash}', '${salt}', CURRENT_TIMESTAMP)`;
+  return `INSERT INTO Users (username, email, password_hash, created_date) VALUES ('${username}', '${email}', '${passwordHash}', CURRENT_TIMESTAMP)`;
 }
 
 export function buildVulnerableCustomerQuery(
@@ -279,7 +270,6 @@ export async function addToPasswordHistory(
 }
 
 export default {
-  generateSalt,
   generatePasswordResetToken,
   hashPasswordVulnerable,
   comparePasswordsVulnerable,

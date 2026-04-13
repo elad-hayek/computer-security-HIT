@@ -7,14 +7,6 @@ import crypto from "crypto";
 const SALT_ROUNDS = 12; // bcryptjs salt rounds for hashing
 
 /**
- * SECURE: Generate a random salt for additional security
- * Note: bcryptjs includes salt in the hash, but this can be used elsewhere
- */
-export function generateSalt(): string {
-  return crypto.randomBytes(16).toString("hex");
-}
-
-/**
  * SECURE: Hash password using bcryptjs
  * WHY THIS IS SECURE:
  * - Uses bcryptjs algorithm (adaptive and slowing)
@@ -157,7 +149,6 @@ export async function addPasswordToHistory(
 }
 
 export default {
-  generateSalt,
   hashPasswordSecure,
   comparePasswordsSecure,
   validatePasswordPolicy,

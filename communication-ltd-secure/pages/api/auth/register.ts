@@ -3,7 +3,6 @@ import { getConnection, getAsync, runAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
   hashPasswordSecure,
-  generateSalt,
   addPasswordToHistory,
 } from "@/lib/auth";
 import { getPasswordConfig, isWeakPassword } from "@/lib/passwordConfig";
@@ -95,12 +94,11 @@ export default async function handler(
 
     // SECURE: Hash password with bcryptjs
     const passwordHash = await hashPasswordSecure(password);
-    const salt = generateSalt();
 
     // SECURE: Use parameterized query with new fields
     const query = `
-      INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, salt, created_date) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, created_date) 
+      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `;
 
     await runAsync(db, query, [
@@ -110,7 +108,6 @@ export default async function handler(
       lastName || null,
       phone || null,
       passwordHash,
-      salt,
     ]);
 
     // Get the newly created user's ID to add to password history

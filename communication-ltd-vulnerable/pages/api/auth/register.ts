@@ -3,7 +3,6 @@ import { getConnection } from "@/lib/db";
 import {
   validatePasswordPolicy,
   hashPasswordVulnerable,
-  generateSalt,
   addPasswordToHistory,
 } from "@/lib/auth";
 import { getPasswordConfig, isWeakPassword } from "@/lib/passwordConfig";
@@ -83,7 +82,6 @@ export default async function handler(
     // VULNERABLE: No password hashing - just use plain text
     // WHY THIS IS BAD: If DB is breached, all passwords are compromised
     const passwordHash = password; // VULNERABLE: Plain text!
-    const salt = generateSalt();
 
     // VULNERABLE: Build query with string concatenation
     // ATTACK EXAMPLE:
@@ -93,7 +91,7 @@ export default async function handler(
     // Or XSS via firstName:
     // firstName = "<img src=x onerror='alert(1)'>"
     // This would be stored as-is and executed later
-    const query = `INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, salt, created_date) VALUES ('${username}', '${email}', '${firstName || ""}', '${lastName || ""}', '${phone || ""}', '${passwordHash}', '${salt}', CURRENT_TIMESTAMP)`;
+    const query = `INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, created_date) VALUES ('${username}', '${email}', '${firstName || ""}', '${lastName || ""}', '${phone || ""}', '${passwordHash}', CURRENT_TIMESTAMP)`;
 
     console.log("[DEBUG] Executing query:", query); // VULNERABLE: Shows SQL
 

@@ -9,7 +9,6 @@
 -- - username UNIQUE: Prevents duplicate accounts per business rule
 -- - email UNIQUE: Unique email per user
 -- - password_hash: Store hashed password (NEVER plain text)
--- - salt: Unique salt per user for hashing calculations
 -- - first_name, last_name, phone: User contact information
 -- - login_attempts: Track failed logins for rate limiting
 -- - locked_until: Timestamp for account lockout after N failed attempts
@@ -23,7 +22,6 @@ CREATE TABLE IF NOT EXISTS Users (
     last_name TEXT,
     phone TEXT,
     password_hash TEXT NOT NULL,
-    salt TEXT NOT NULL,
     password_changed_date DATETIME,
     login_attempts INTEGER DEFAULT 0,
     locked_until DATETIME,
@@ -80,7 +78,7 @@ CREATE INDEX IF NOT EXISTS IDX_PasswordResetTokens_TokenHash ON PasswordResetTok
 -- =============================================
 -- Example user: username=testuser, password (plain for reference only): TestPass123
 -- In real scenario, password_hash would contain bcryptjs hash
-INSERT OR IGNORE INTO Users (id, username, email, first_name, last_name, phone, password_hash, salt, created_date)
+INSERT OR IGNORE INTO Users (id, username, email, first_name, last_name, phone, password_hash, created_date)
 VALUES (
     1,
     'testuser',
@@ -89,7 +87,6 @@ VALUES (
     'User',
     '+1234567890',
     '$2b$12$CuSprHMc3tpnjTB8pfhjmuSNggTR/28AqTyQsix3NbM61nCtFzQuy',
-    'CuSprHMc3tpnjTB8pfhjmu',
     CURRENT_TIMESTAMP
 );
 
