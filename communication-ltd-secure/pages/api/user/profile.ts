@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection, get } from "@/lib/db";
+import { getConnection, getAsync } from "@/lib/db";
 
 type ResponseData = {
   success: boolean;
@@ -55,7 +55,7 @@ export default async function handler(
       FROM Users 
       WHERE id = ?
     `;
-    const user = await get(db, profileQuery, [userId]);
+    const user = await getAsync(db, profileQuery, [userId]);
 
     if (!user) {
       return res

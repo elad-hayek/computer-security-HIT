@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection } from "@/lib/db";
+import { getConnection, getAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
   hashPasswordSecure,
@@ -74,7 +74,7 @@ export default async function handler(
 
     // SECURE: Parameterized query to fetch user
     const userQuery = `SELECT id, password_hash FROM Users WHERE id = ?`;
-    const user = await db.get(userQuery, [userId]);
+    const user = await getAsync(db, userQuery, [userId]);
 
     if (!user) {
       return res

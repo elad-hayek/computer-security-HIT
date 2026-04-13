@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection } from "@/lib/db";
+import { getConnection, getAsync, runAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
   hashPasswordSecure,
@@ -69,7 +69,7 @@ async function handleRequestToken(
 
     // SECURE: Parameterized query
     const userQuery = `SELECT id, email, username FROM Users WHERE email = ?`;
-    const user = await db.get(userQuery, [email]);
+    const user = await getAsync(db, userQuery, [email]);
 
     // SECURE: Generic response (doesn't leak whether email exists)
     if (!user) {
@@ -91,7 +91,7 @@ async function handleRequestToken(
     const insertQuery = `INSERT INTO PasswordResetTokens (user_id, token_hash, expiry_date, used) 
                          VALUES (?, ?, ?, 0)`;
 
-    await db.run(insertQuery, [user.id, tokenHash, expiry.toISOString()]);
+    await runAsync(db, insertQuery, [user.id, tokenHash, expiry.toISOString()]);
 
     // In real application, would send email with reset link
     // Email would contain: visit ${process.env.NEXT_PUBLIC_APP_URL}/forgot-password?token=${token}

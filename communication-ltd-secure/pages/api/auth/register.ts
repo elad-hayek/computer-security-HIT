@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection } from "@/lib/db";
+import { getConnection, getAsync, runAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
   hashPasswordSecure,
@@ -103,7 +103,7 @@ export default async function handler(
       VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `;
 
-    await db.run(query, [
+    await runAsync(db, query, [
       username,
       email,
       firstName || null,
@@ -115,7 +115,7 @@ export default async function handler(
 
     // Get the newly created user's ID to add to password history
     const userQuery = `SELECT id FROM Users WHERE username = ?`;
-    const user = await db.get(userQuery, [username]);
+    const user = await getAsync(db, userQuery, [username]);
 
     if (user) {
       // Add initial password to history
