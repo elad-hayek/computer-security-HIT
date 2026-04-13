@@ -1,14 +1,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-
-interface PasswordConfig {
-  minLength: number;
-  requireUppercase: boolean;
-  requireLowercase: boolean;
-  requireDigits: boolean;
-  requireSpecialChars: boolean;
-}
+import type { PasswordConfig } from "@/lib/passwordConfig";
 
 export default function Register() {
   const router = useRouter();

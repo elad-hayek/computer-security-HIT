@@ -1,18 +1,10 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-
-interface PasswordConfig {
-  minLength: number;
-  requireUppercase: boolean;
-  requireLowercase: boolean;
-  requireDigits: boolean;
-  requireSpecialChars: boolean;
-}
+import type { PasswordConfig } from "@/lib/passwordConfig";
 
 export default function ForgotPassword() {
   const router = useRouter();
-  const { token: tokenFromQuery } = router.query;
 
   // Step state
   const [currentStep, setCurrentStep] = useState(1);
@@ -20,8 +12,8 @@ export default function ForgotPassword() {
   // Step 1: Email
   const [email, setEmail] = useState("");
 
-  // Step 3: Reset Password
-  const [token, setToken] = useState(tokenFromQuery ? String(tokenFromQuery) : "");
+  // Step 2: Code entry
+  const [code, setCode] = useState("");
   const [formData, setFormData] = useState({
     newPassword: "",
     confirmPassword: "",
@@ -46,14 +38,6 @@ export default function ForgotPassword() {
     hasDigit: false,
     hasSpecial: false,
   });
-
-  // If token in URL, start at step 3
-  useEffect(() => {
-    if (tokenFromQuery) {
-      setCurrentStep(3);
-      setToken(String(tokenFromQuery));
-    }
-  }, [tokenFromQuery]);
 
   useEffect(() => {
     const fetchPasswordConfig = async () => {
@@ -89,11 +73,12 @@ export default function ForgotPassword() {
 
       if (data.success) {
         setSuccess(true);
-        setMessage("Check your email for the password reset token. (Check console for token in demo)");
+        setMessage("Check your email for the verification code.");
         setCurrentStep(2);
+        setCode("");
       } else {
         setSuccess(false);
-        setMessage(data.message || "Error requesting token");
+        setMessage(data.message || "Error requesting code");
       }
     } catch (error: any) {
       setSuccess(false);
@@ -103,7 +88,40 @@ export default function ForgotPassword() {
     }
   };
 
-  // Step 3: Handle password change with token
+  // Step 2: Verify code
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMessage("");
+    setErrors([]);
+    setIsLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, email, action: "verifyCode" }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setSuccess(true);
+        setMessage("Code verified. Enter your new password.");
+        setCurrentStep(3);
+      } else {
+        setSuccess(false);
+        setMessage(data.message || "Invalid or expired code");
+        if (data.errors) setErrors(data.errors);
+      }
+    } catch (error: any) {
+      setSuccess(false);
+      setMessage("Error: " + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Step 3: Handle password change
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData({
@@ -133,7 +151,7 @@ export default function ForgotPassword() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          token,
+          code,
           newPassword: formData.newPassword,
           confirmPassword: formData.confirmPassword,
           action: "resetPassword",
@@ -162,15 +180,6 @@ export default function ForgotPassword() {
     }
   };
 
-  const handleProceedToStep3 = () => {
-    if (!token.trim()) {
-      setMessage("Please enter the token from your email");
-      return;
-    }
-    setCurrentStep(3);
-    setMessage("");
-  };
-
   const isPasswordValid = (() => {
     if (passwordConfig.minLength && !passwordValidation.minLength) return false;
     if (passwordConfig.requireUppercase && !passwordValidation.hasUppercase)
@@ -181,7 +190,10 @@ export default function ForgotPassword() {
       return false;
     if (passwordConfig.requireSpecialChars && !passwordValidation.hasSpecial)
       return false;
-    return formData.newPassword === formData.confirmPassword && formData.newPassword.length > 0;
+    return (
+      formData.newPassword === formData.confirmPassword &&
+      formData.newPassword.length > 0
+    );
   })();
 
   return (
@@ -224,33 +236,26 @@ export default function ForgotPassword() {
           </>
         )}
 
-        {/* Step 2: Token Sent Message */}
+        {/* Step 2: Code Verification */}
         {currentStep === 2 && (
           <>
             <p style={styles.description}>
-              We've sent a password reset token to your email address.
+              Enter the verification code sent to your email address.
             </p>
 
-            <div style={styles.section}>
-              <p style={{ color: "#2e7d32", fontWeight: "bold" }}>
-                ✓ Token sent to {email}
-              </p>
-
+            <form onSubmit={handleVerifyCode} style={styles.form}>
               <input
                 type="text"
-                placeholder="Enter token from email"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
+                placeholder="Verification Code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
                 required
                 style={styles.input}
+                disabled={isLoading}
               />
 
-              <button
-                type="button"
-                onClick={handleProceedToStep3}
-                style={styles.button}
-              >
-                Proceed to Reset Password
+              <button type="submit" style={styles.button} disabled={isLoading}>
+                {isLoading ? "Verifying..." : "Verify Code"}
               </button>
 
               <button
@@ -258,14 +263,14 @@ export default function ForgotPassword() {
                 onClick={() => {
                   setCurrentStep(1);
                   setEmail("");
-                  setToken("");
+                  setCode("");
                   setMessage("");
                 }}
                 style={styles.backButton}
               >
                 ← Back
               </button>
-            </div>
+            </form>
           </>
         )}
 
@@ -300,7 +305,9 @@ export default function ForgotPassword() {
               />
 
               <div style={styles.passwordRequirements}>
-                <p style={{ margin: "5px 0", fontWeight: "bold" }}>Password Requirements:</p>
+                <p style={{ margin: "5px 0", fontWeight: "bold" }}>
+                  Password Requirements:
+                </p>
                 {passwordConfig.minLength > 0 && (
                   <div
                     style={{
@@ -401,8 +408,8 @@ export default function ForgotPassword() {
         </p>
 
         <p style={styles.note}>
-          🟢 SECURE: No email enumeration - generic response sent. Reset tokens
-          are SHA-1 hashed and expire after 1 hour.
+          🟢 SECURE: No email enumeration - generic response sent. Verification
+          codes are SHA-1 hashed and expire after 1 hour.
         </p>
       </div>
     </div>
@@ -540,9 +547,5 @@ const styles = {
     color: "#c62828",
     fontSize: "12px",
     margin: "5px 0",
-  },
-};
-    fontSize: "12px",
-    borderLeft: "4px solid #2e7d32",
   },
 };

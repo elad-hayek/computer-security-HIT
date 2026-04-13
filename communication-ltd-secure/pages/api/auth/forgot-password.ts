@@ -20,16 +20,17 @@ type ResponseData = {
  * POST /api/auth/forgot-password
  *
  * Actions:
- * 1. requestToken - Generate and send reset token to email
- * 2. resetPassword - Validate token and reset password
+ * 1. requestToken - Generate and send reset code to email
+ * 2. verifyCode - Validate the code entered by user
+ * 3. resetPassword - Validate code and reset password
  *
  * SECURITY FEATURES:
  * 1. Parameterized queries prevent SQL injection
- * 2. Token is generated securely with crypto.randomBytes
- * 3. Only hash is stored in DB (token itself sent via email)
+ * 2. Code is generated securely with crypto.randomBytes
+ * 3. Only hash is stored in DB (code itself sent via email)
  * 4. Generic response (doesn't reveal if email exists)
- * 5. Token expires after 1 hour
- * 6. Token marked as used (prevent reuse)
+ * 5. Code expires after 1 hour
+ * 6. Code marked as used (prevent reuse)
  * 7. Password history check (prevent password reuse)
  * 8. Bcryptjs password hashing with salt
  */
@@ -47,6 +48,8 @@ export default async function handler(
 
   if (action === "requestToken") {
     return handleRequestToken(req, res);
+  } else if (action === "verifyCode") {
+    return handleVerifyCode(req, res);
   } else if (action === "resetPassword") {
     return handleResetPassword(req, res);
   } else {
@@ -80,10 +83,12 @@ async function handleRequestToken(
       });
     }
 
+    // TODO: explain this code
     // SECURE: Generate cryptographically secure token
     const token = crypto.randomBytes(32).toString("hex");
     const tokenHash = crypto.createHash("sha1").update(token).digest("hex");
 
+    // TODO: decrease token expiry time in real application (e.g. 15 minutes)
     // Set expiry to 1 hour from now
     const expiry = new Date(Date.now() + 60 * 60 * 1000);
 
@@ -93,6 +98,7 @@ async function handleRequestToken(
 
     await runAsync(db, insertQuery, [user.id, tokenHash, expiry.toISOString()]);
 
+    // TODO: Implement email sending logic here
     // In real application, would send email with reset link
     // Email would contain: visit ${process.env.NEXT_PUBLIC_APP_URL}/forgot-password?token=${token}
     // For demo purposes, log to console
@@ -118,13 +124,78 @@ async function handleRequestToken(
   }
 }
 
+async function handleVerifyCode(
+  req: NextApiRequest,
+  res: NextApiResponse<ResponseData>,
+) {
+  const { code, email } = req.body;
+
+  if (!code || !email) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Code and email required" });
+  }
+
+  try {
+    // TODO: explain this code
+    // SECURE: Hash code to find it
+    const codeHash = crypto.createHash("sha1").update(code).digest("hex");
+
+    const db = await getConnection();
+
+    // SECURE: Get user by email
+    const userQuery = `SELECT id FROM Users WHERE email = ?`;
+    const user = await getAsync(db, userQuery, [email]);
+
+    if (!user) {
+      // SECURE: Generic response (doesn't leak whether email exists)
+      return res.status(200).json({
+        success: false,
+        message: "Invalid code or email combination",
+      });
+    }
+
+    // SECURE: Parameterized query to find code
+    const codeQuery = `SELECT id, expiry_date, used FROM PasswordResetTokens 
+                       WHERE token_hash = ? AND user_id = ?`;
+    const codeData = await getAsync(db, codeQuery, [codeHash, user.id]);
+
+    if (!codeData || codeData.used) {
+      return res.status(200).json({
+        success: false,
+        message: "Invalid or expired code",
+      });
+    }
+
+    if (new Date(codeData.expiry_date) < new Date()) {
+      return res.status(200).json({
+        success: false,
+        message: "Code has expired",
+      });
+    }
+
+    // Code is valid
+    return res.status(200).json({
+      success: true,
+      message: "Code verified successfully",
+    });
+  } catch (error: any) {
+    console.error("Verify code error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to verify code",
+    });
+  }
+}
+
 async function handleResetPassword(
   req: NextApiRequest,
   res: NextApiResponse<ResponseData>,
 ) {
-  const { token, newPassword, confirmPassword } = req.body;
+  const { code, newPassword, confirmPassword } = req.body;
 
-  if (!token || !newPassword || !confirmPassword) {
+  if (!code || !newPassword || !confirmPassword) {
     return res
       .status(400)
       .json({ success: false, message: "Missing required fields" });
@@ -148,31 +219,31 @@ async function handleResetPassword(
   }
 
   try {
-    // SECURE: Hash token to find it (don't store plain tokens)
-    const tokenHash = crypto.createHash("sha1").update(token).digest("hex");
+    // SECURE: Hash code to find it (don't store plain codes)
+    const codeHash = crypto.createHash("sha1").update(code).digest("hex");
 
     const db = await getConnection();
 
-    // SECURE: Parameterized query to find token
-    const tokenQuery = `SELECT user_id, expiry_date, used FROM PasswordResetTokens 
+    // SECURE: Parameterized query to find code
+    const codeQuery = `SELECT user_id, expiry_date, used FROM PasswordResetTokens 
                         WHERE token_hash = ?`;
-    const tokenData = await db.get(tokenQuery, [tokenHash]);
+    const codeData = await getAsync(db, codeQuery, [codeHash]);
 
-    if (!tokenData || tokenData.used) {
+    if (!codeData || codeData.used) {
       return res
         .status(400)
-        .json({ success: false, message: "Invalid or expired token" });
+        .json({ success: false, message: "Invalid or expired code" });
     }
 
-    if (new Date(tokenData.expiry_date) < new Date()) {
+    if (new Date(codeData.expiry_date) < new Date()) {
       return res
         .status(400)
-        .json({ success: false, message: "Token has expired" });
+        .json({ success: false, message: "Code has expired" });
     }
 
     // SECURE: Check password history - prevent reuse
     const historyCheck = await checkPasswordHistory(
-      tokenData.user_id,
+      codeData.user_id,
       newPassword,
       db,
       config,
@@ -195,14 +266,14 @@ async function handleResetPassword(
       WHERE id = ?
     `;
 
-    await db.run(updateQuery, [newHash, tokenData.user_id]);
+    await runAsync(db, updateQuery, [newHash, codeData.user_id]);
 
     // SECURE: Add new password to history
-    await addPasswordToHistory(tokenData.user_id, newHash, db);
+    await addPasswordToHistory(codeData.user_id, newHash, db);
 
-    // SECURE: Mark token as used to prevent reuse
+    // SECURE: Mark code as used to prevent reuse
     const markUsedQuery = `UPDATE PasswordResetTokens SET used = 1 WHERE token_hash = ?`;
-    await db.run(markUsedQuery, [tokenHash]);
+    await runAsync(db, markUsedQuery, [codeHash]);
 
     return res.status(200).json({
       success: true,
