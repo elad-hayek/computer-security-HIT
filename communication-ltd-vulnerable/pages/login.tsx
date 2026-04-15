@@ -2,9 +2,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 
-// VULNERABLE VERSION - Educational Purpose Only
-// This version demonstrates session and input validation vulnerabilities
-
 export default function Login() {
   const router = useRouter();
   const [formData, setFormData] = useState({
@@ -13,14 +10,12 @@ export default function Login() {
   });
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [isError, setIsError] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    // VULNERABILITY: No input validation - SQL injection possible on backend
     setFormData({
       ...formData,
-      [name]: value,
+      [e.target.name]: e.target.value,
     });
   };
 
@@ -30,8 +25,6 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // VULNERABILITY: Username/password sent unsanitized to API
-      // Backend is vulnerable to SQL injection
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -41,40 +34,30 @@ export default function Login() {
       const data = await res.json();
 
       if (data.success) {
-        // VULNERABILITY: userId stored in localStorage - easily spoofable
-        // An attacker can set any userId value and access another user's profile
-        localStorage.setItem("userId", data.userId);
-
-        // VULNERABILITY: Session ID not stored securely
-        // Should be in HttpOnly cookie, not localStorage
-        setSuccess(true);
-        setMessage("Login successful! Redirecting to dashboard...");
-
+        setIsError(false);
+        setMessage("Login successful! Redirecting...");
         setTimeout(() => {
+          localStorage.setItem("userId", data.user.id);
           router.push("/dashboard");
         }, 1500);
       } else {
-        // VULNERABILITY: Server timing can reveal if username exists (timing attacks)
-        // Different response times for "user not found" vs "invalid password"
-        setSuccess(false);
-        setMessage(data.message);
+        setIsError(true);
+        setMessage(data.message || "Login failed");
       }
     } catch (error: any) {
-      // VULNERABILITY: Detailed error messages shown to attackers
-      setSuccess(false);
+      setIsError(true);
       setMessage("Error: " + error.message);
     } finally {
       setIsLoading(false);
     }
   };
 
+
   return (
     <div style={styles.container}>
       <div style={styles.card}>
         <h1>Login - Communication_LTD</h1>
-        <p style={styles.vulnerable}>
-          ⚠ VULNERABLE VERSION - Security Flaws Demonstrated
-        </p>
+        <p style={styles.vulnerable}>⚠ VULNERABLE VERSION - Educational Purpose</p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <input
@@ -86,7 +69,6 @@ export default function Login() {
             required
             style={styles.input}
             disabled={isLoading}
-            autoComplete="username"
           />
 
           <input
@@ -98,7 +80,6 @@ export default function Login() {
             required
             style={styles.input}
             disabled={isLoading}
-            autoComplete="current-password"
           />
 
           <button type="submit" style={styles.button} disabled={isLoading}>
@@ -110,24 +91,26 @@ export default function Login() {
           <div
             style={{
               ...styles.message,
-              color: success ? "green" : "red",
+              color: isError ? "red" : "green",
             }}
           >
-            {/* VULNERABILITY: Message not sanitized */}
             {message}
-          </div
+          </div>
         )}
 
         <div style={styles.links}>
-          <Link href="/forgot-password">Forgot Password?</Link>
-          <span> | </span>
-          <Link href="/register">Register</Link>
+          <p>
+            Don't have an account? <Link href="/register">Register here</Link>
+          </p>
+          <p>
+            Forgot your password?{" "}
+            <Link href="/forgot-password">Reset it here</Link>
+          </p>
         </div>
 
         <p style={styles.note}>
-          🔴 VULNERABLE: Backend SQL injection in login query. SessionId in
-          localStorage (spoofable). No timing-safe comparison. Plain-text
-          password saved in intercepted requests. No rate limiting.
+          🔴 VULNERABLE: SQL injection in backend query. No rate limiting.
+          Session in localStorage (spoofable). No timing-safe password comparison.
         </p>
       </div>
     </div>
@@ -141,13 +124,61 @@ const styles = {
     alignItems: "center",
     minHeight: "100vh",
     backgroundColor: "#f5f5f5",
-    padding: "10px",
   },
   card: {
     backgroundColor: "white",
     padding: "40px",
     borderRadius: "8px",
     boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+    maxWidth: "400px",
+    width: "100%",
+  },
+  vulnerable: {
+    color: "#d32f2f",
+    fontWeight: "bold" as const,
+    marginBottom: "20px",
+  },
+  form: {
+    display: "flex" as const,
+    flexDirection: "column" as const,
+    gap: "15px",
+  },
+  input: {
+    padding: "10px",
+    border: "1px solid #ddd",
+    borderRadius: "4px",
+    fontSize: "14px",
+  },
+  button: {
+    padding: "10px",
+    backgroundColor: "#2196F3",
+    color: "white",
+    border: "none",
+    borderRadius: "4px",
+    cursor: "pointer" as const,
+    fontSize: "16px",
+  },
+  message: {
+    marginTop: "15px",
+    padding: "10px",
+    borderRadius: "4px",
+    backgroundColor: "#f0f0f0",
+    textAlign: "center" as const,
+  },
+  links: {
+    marginTop: "15px",
+    fontSize: "14px",
+    textAlign: "center" as const,
+  },
+  note: {
+    marginTop: "20px",
+    padding: "15px",
+    backgroundColor: "#ffebee",
+    borderRadius: "4px",
+    fontSize: "12px",
+    borderLeft: "4px solid #d32f2f",
+  },
+};
     maxWidth: "400px",
     width: "100%",
   },

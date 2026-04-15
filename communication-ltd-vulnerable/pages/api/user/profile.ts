@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection, get } from "@/lib/db";
+import { getConnection } from "@/lib/db";
 
 type ResponseData = {
   success: boolean;
@@ -18,13 +18,10 @@ type ResponseData = {
  * VULNERABLE User Profile API Endpoint
  * GET /api/user/profile
  *
- * Retrieves authenticated user profile data from the database
- *
- * SECURITY FEATURES:
- * 1. Parameterized queries prevent SQL injection
- * 2. Returns only basic user fields (excludes sensitive data like login_attempts, locked_until)
- * 3. Validates userId is provided
- * 4. Generic error messages (no information leakage)
+ * VULNERABILITIES:
+ * 1. SQL Injection via string concatenation (userId parameter)
+ * 2. No session validation - any userId accepted from client
+ * 3. No verification that userId belongs to authenticated user
  */
 export default async function handler(
   req: NextApiRequest,
@@ -36,7 +33,7 @@ export default async function handler(
       .json({ success: false, message: "Method not allowed" });
   }
 
-  const { userId } = req.body;
+  const { userId } = req.query;
 
   if (!userId) {
     return res
@@ -47,15 +44,17 @@ export default async function handler(
   try {
     const db = await getConnection();
 
-    // SECURE: Use parameterized query to fetch user profile
-    // WHY: SQLite treats ? as data placeholder, not code
-    // Returns only safe, non-sensitive fields
+    // VULNERABILITY: SQL Injection via string concatenation
+    // An attacker could input: userId = "1 OR '1'='1"
+    // Query becomes: SELECT ... FROM Users WHERE id = 1 OR '1'='1
+    // This returns all users!
     const profileQuery = `
       SELECT id, username, email, first_name, last_name, phone 
       FROM Users 
-      WHERE id = ?
+      WHERE id = ${userId}
     `;
-    const user = await get(db, profileQuery, [userId]);
+
+    const user = await db.get(profileQuery);
 
     if (!user) {
       return res

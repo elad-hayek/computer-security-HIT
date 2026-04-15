@@ -79,9 +79,7 @@ export default async function handler(
       // Attacker using "admin' --" might get admin account
       return res.status(401).json({
         success: false,
-        message: "Invalid username or password",
-        vulnerable_info:
-          'Try attack: username="admin\' --" to see SQL injection in action',
+        message: "Invalid credentials",
       });
     }
 
@@ -93,13 +91,12 @@ export default async function handler(
 
     return res.status(200).json({
       success: true,
-      message: `Login successful for user '${user.username}' (VULNERABLE VERSION)`,
+      message: "Login successful",
       user: {
         id: user.id,
         username: user.username,
         email: user.email,
       },
-      vulnerable_info: `[VULNERABLE] Logged in user: ${user.username}. Try SQL injection: admin' --`,
     });
   } catch (error: any) {
     console.error("Login error:", error);
@@ -108,7 +105,7 @@ export default async function handler(
     // Helps attackers understand database structure
     return res.status(500).json({
       success: false,
-      message: "Login failed: " + error.message,
+      message: "Login failed",
     });
   }
 }

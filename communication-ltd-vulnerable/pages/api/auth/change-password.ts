@@ -118,7 +118,7 @@ export default async function handler(
 
     return res.status(500).json({
       success: false,
-      message: "Failed to change password: " + error.message,
+      message: "Failed to change password",
     });
   }
 }

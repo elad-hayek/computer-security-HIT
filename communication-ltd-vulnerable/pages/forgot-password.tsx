@@ -1,21 +1,10 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-
-// VULNERABLE VERSION - Educational Purpose Only
-// This version demonstrates account enumeration, SQL injection, and weak token handling
-
-interface PasswordConfig {
-  minLength: number;
-  requireUppercase: boolean;
-  requireLowercase: boolean;
-  requireDigits: boolean;
-  requireSpecialChars: boolean;
-}
+import type { PasswordConfig } from "@/lib/passwordConfig";
 
 export default function ForgotPassword() {
   const router = useRouter();
-  const { token: tokenFromQuery } = router.query;
 
   // Step state
   const [currentStep, setCurrentStep] = useState(1);
@@ -23,8 +12,8 @@ export default function ForgotPassword() {
   // Step 1: Email
   const [email, setEmail] = useState("");
 
-  // Step 3: Reset Password
-  const [token, setToken] = useState(tokenFromQuery ? String(tokenFromQuery) : "");
+  // Step 2: Code entry
+  const [code, setCode] = useState("");
   const [formData, setFormData] = useState({
     newPassword: "",
     confirmPassword: "",
@@ -49,14 +38,6 @@ export default function ForgotPassword() {
     hasDigit: false,
     hasSpecial: false,
   });
-
-  // If token in URL, start at step 3
-  useEffect(() => {
-    if (tokenFromQuery) {
-      setCurrentStep(3);
-      setToken(String(tokenFromQuery));
-    }
-  }, [tokenFromQuery]);
 
   useEffect(() => {
     const fetchPasswordConfig = async () => {
@@ -90,15 +71,14 @@ export default function ForgotPassword() {
 
       const data = await res.json();
 
-      // VULNERABILITY: Account enumeration - different messages for different cases
       if (data.success) {
         setSuccess(true);
-        setMessage("Check your email for the password reset token. (Check console for token in demo)");
+        setMessage("Check your email for the verification code.");
         setCurrentStep(2);
+        setCode("");
       } else {
-        // VULNERABILITY: This reveals if email exists in the system
         setSuccess(false);
-        setMessage(data.message || "Error requesting token");
+        setMessage(data.message || "Error requesting code");
       }
     } catch (error: any) {
       setSuccess(false);
@@ -108,9 +88,41 @@ export default function ForgotPassword() {
     }
   };
 
-  // Step 3: Handle password change with token
+  // Step 2: Verify code
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMessage("");
+    setErrors([]);
+    setIsLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, email, action: "verifyCode" }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setSuccess(true);
+        setMessage("Code verified. Enter your new password.");
+        setCurrentStep(3);
+      } else {
+        setSuccess(false);
+        setMessage(data.message || "Invalid or expired code");
+        if (data.errors) setErrors(data.errors);
+      }
+    } catch (error: any) {
+      setSuccess(false);
+      setMessage("Error: " + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Step 3: Handle password change
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // VULNERABILITY: No input validation
     const { name, value } = e.target;
     setFormData({
       ...formData,
@@ -139,7 +151,7 @@ export default function ForgotPassword() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          token,
+          code,
           newPassword: formData.newPassword,
           confirmPassword: formData.confirmPassword,
           action: "resetPassword",
@@ -168,15 +180,6 @@ export default function ForgotPassword() {
     }
   };
 
-  const handleProceedToStep3 = () => {
-    if (!token.trim()) {
-      setMessage("Please enter the token from your email");
-      return;
-    }
-    setCurrentStep(3);
-    setMessage("");
-  };
-
   const isPasswordValid = (() => {
     if (passwordConfig.minLength && !passwordValidation.minLength) return false;
     if (passwordConfig.requireUppercase && !passwordValidation.hasUppercase)
@@ -187,14 +190,17 @@ export default function ForgotPassword() {
       return false;
     if (passwordConfig.requireSpecialChars && !passwordValidation.hasSpecial)
       return false;
-    return formData.newPassword === formData.confirmPassword && formData.newPassword.length > 0;
+    return (
+      formData.newPassword === formData.confirmPassword &&
+      formData.newPassword.length > 0
+    );
   })();
 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
         <h1>Forgot Password - Communication_LTD</h1>
-        <p style={styles.vulnerable}>⚠ VULNERABLE VERSION - Security Flaws Demonstrated</p>
+        <p style={styles.vulnerable}>⚠ VULNERABLE VERSION - Educational Purpose</p>
 
         <div style={styles.stepIndicator}>
           <div style={styles.stepDot(currentStep >= 1)}>1</div>
@@ -209,7 +215,7 @@ export default function ForgotPassword() {
         {currentStep === 1 && (
           <>
             <p style={styles.description}>
-              Enter your email address to receive a password reset token.
+              Enter your email address to receive a password reset code.
             </p>
 
             <form onSubmit={handleRequestToken} style={styles.form}>
@@ -224,39 +230,32 @@ export default function ForgotPassword() {
               />
 
               <button type="submit" style={styles.button} disabled={isLoading}>
-                {isLoading ? "Sending..." : "Request Reset Token"}
+                {isLoading ? "Sending..." : "Request Reset Code"}
               </button>
             </form>
           </>
         )}
 
-        {/* Step 2: Token Sent Message */}
+        {/* Step 2: Code Verification */}
         {currentStep === 2 && (
           <>
             <p style={styles.description}>
-              We've sent a password reset token to your email address.
+              Enter the verification code sent to your email address.
             </p>
 
-            <div style={styles.section}>
-              <p style={{ color: "#d32f2f", fontWeight: "bold" }}>
-                ✓ Token sent to {email}
-              </p>
-
+            <form onSubmit={handleVerifyCode} style={styles.form}>
               <input
                 type="text"
-                placeholder="Enter token from email"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
+                placeholder="Verification Code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
                 required
                 style={styles.input}
+                disabled={isLoading}
               />
 
-              <button
-                type="button"
-                onClick={handleProceedToStep3}
-                style={styles.button}
-              >
-                Proceed to Reset Password
+              <button type="submit" style={styles.button} disabled={isLoading}>
+                {isLoading ? "Verifying..." : "Verify Code"}
               </button>
 
               <button
@@ -264,14 +263,14 @@ export default function ForgotPassword() {
                 onClick={() => {
                   setCurrentStep(1);
                   setEmail("");
-                  setToken("");
+                  setCode("");
                   setMessage("");
                 }}
                 style={styles.backButton}
               >
                 ← Back
               </button>
-            </div>
+            </form>
           </>
         )}
 
@@ -407,9 +406,8 @@ export default function ForgotPassword() {
         </p>
 
         <p style={styles.note}>
-          🔴 VULNERABLE: Account enumeration - reveals if email exists. No input
-          validation. SQL injection possible in backend. Reset tokens not
-          properly validated or expired. Email sending not implemented securely.
+          🔴 VULNERABLE: Account enumeration. SQL injection possible in backend.
+          Weak token handling. No input validation. Password not hashed securely.
         </p>
       </div>
     </div>
@@ -452,7 +450,7 @@ const styles = {
     display: "flex" as const,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: isActive ? "#d32f2f" : "#ddd",
+    backgroundColor: isActive ? "#2196F3" : "#ddd",
     color: isActive ? "white" : "#999",
     fontWeight: "bold" as const,
     fontSize: "14px",
@@ -460,7 +458,7 @@ const styles = {
   stepLine: (isActive: boolean) => ({
     width: "30px",
     height: "2px",
-    backgroundColor: isActive ? "#d32f2f" : "#ddd",
+    backgroundColor: isActive ? "#2196F3" : "#ddd",
   }),
   stepLabel: {
     textAlign: "center" as const,
@@ -479,11 +477,6 @@ const styles = {
     flexDirection: "column" as const,
     gap: "15px",
   },
-  section: {
-    display: "flex" as const,
-    flexDirection: "column" as const,
-    gap: "15px",
-  },
   input: {
     padding: "10px",
     border: "1px solid #ddd",
@@ -492,7 +485,7 @@ const styles = {
   },
   button: {
     padding: "10px",
-    backgroundColor: "#d32f2f",
+    backgroundColor: "#2196F3",
     color: "white",
     border: "none",
     borderRadius: "4px",
@@ -501,31 +494,12 @@ const styles = {
   },
   backButton: {
     padding: "10px",
-    backgroundColor: "#f0f0f0",
-    color: "#333",
-    border: "1px solid #ddd",
+    backgroundColor: "#808080",
+    color: "white",
+    border: "none",
     borderRadius: "4px",
     cursor: "pointer" as const,
     fontSize: "14px",
-  },
-  message: {
-    marginTop: "15px",
-    padding: "10px",
-    borderRadius: "4px",
-    backgroundColor: "#f0f0f0",
-    textAlign: "center" as const,
-  },
-  link: {
-    marginTop: "15px",
-    textAlign: "center" as const,
-    fontSize: "14px",
-  },
-  note: {
-    marginTop: "20px",
-    padding: "15px",
-    backgroundColor: "#ffebee",
-    borderRadius: "4px",
-    fontSize: "12px",
   },
   passwordRequirements: {
     padding: "10px",
@@ -534,28 +508,26 @@ const styles = {
     fontSize: "12px",
   },
   requirement: {
-    margin: "5px 0",
+    padding: "3px 0",
     fontSize: "12px",
   },
-  errorList: {
-    marginTop: "15px",
-    padding: "10px",
-    backgroundColor: "#ffebee",
-    borderRadius: "4px",
-    borderLeft: "3px solid #d32f2f",
-  },
-  errorItem: {
-    color: "#c62828",
-    fontSize: "12px",
-    margin: "5px 0",
-  },
-};
   message: {
     marginTop: "15px",
     padding: "10px",
     borderRadius: "4px",
     backgroundColor: "#f0f0f0",
     textAlign: "center" as const,
+  },
+  errorList: {
+    marginTop: "15px",
+    padding: "10px",
+    backgroundColor: "#ffebee",
+    borderRadius: "4px",
+    color: "#c62828",
+  },
+  errorItem: {
+    margin: "5px 0",
+    fontSize: "12px",
   },
   link: {
     marginTop: "15px",
