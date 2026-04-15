@@ -2,14 +2,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import Cookies from "js-cookie";
-
-interface PasswordConfig {
-  minLength: number;
-  requireUppercase: boolean;
-  requireLowercase: boolean;
-  requireDigits: boolean;
-  requireSpecialChars: boolean;
-}
+import type { PasswordConfig } from "@/lib/passwordConfig";
 
 export default function ChangePassword() {
   const router = useRouter();
