@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection, getAsync } from "@/lib/db";
+import { getAuthFromCookie } from "@/lib/cookies";
 
 type ResponseData = {
   success: boolean;
@@ -36,12 +37,10 @@ export default async function handler(
       .json({ success: false, message: "Method not allowed" });
   }
 
-  const { userId } = req.query;
-
+  // SECURE: Extract userId from authentication cookie (not from query parameter)
+  const userId = getAuthFromCookie(req);
   if (!userId) {
-    return res
-      .status(400)
-      .json({ success: false, message: "User ID is required" });
+    return res.status(401).json({ success: false, message: "Unauthorized" });
   }
 
   try {

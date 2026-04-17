@@ -7,6 +7,7 @@ import {
   checkPasswordHistory,
   addPasswordToHistory,
 } from "@/lib/auth";
+import { getAuthFromCookie } from "@/lib/cookies";
 import { getPasswordConfig } from "@/lib/passwordConfig";
 
 type ResponseData = {
@@ -35,9 +36,16 @@ export default async function handler(
       .json({ success: false, message: "Method not allowed" });
   }
 
-  const { userId, oldPassword, newPassword, confirmPassword } = req.body;
+  const { oldPassword, newPassword, confirmPassword } = req.body;
 
-  if (!userId || !oldPassword || !newPassword || !confirmPassword) {
+  // VULNERABLE: Extract userId from authentication cookie (not from request body)
+  // Note: In this vulnerable version, we still verify old password like secure version
+  const userId = getAuthFromCookie(req);
+  if (!userId) {
+    return res.status(401).json({ success: false, message: "Unauthorized" });
+  }
+
+  if (!oldPassword || !newPassword || !confirmPassword) {
     return res
       .status(400)
       .json({ success: false, message: "Missing required fields" });
@@ -65,21 +73,49 @@ export default async function handler(
   try {
     const db = await getConnection();
 
-    // VULNERABLE: No verification of old password!
-    // VULNERABLE: String concatenation - userId could be injected
-    // ATTACK: userId = "1; DROP TABLE Users; --"
-    const userQuery = `SELECT id FROM Users WHERE id = ${userId}`;
-    console.log("[VULNERABLE DEBUG] User query:", userQuery);
+    // VULNERABLE: SQL injection via string concatenation
+    // Even though userId is numeric from cookie, the pattern demonstrates vulnerability
+    const userQuery = `SELECT id, password_hash FROM Users WHERE id = ${userId}`;
 
-    const userResult = await db.all(userQuery);
+    const userResult = await db.get(userQuery);
 
-    if (userResult.length === 0) {
+    if (!userResult) {
       return res
         .status(404)
         .json({ success: false, message: "User not found" });
     }
 
-    // NOTE: This checks password history but uses vulnerable SQL injection in checkPasswordHistory
+    // VULNERABLE: Verify old password using bcryptjs (same as secure version for consistency)
+    // This ensures only the real user can change their password
+    const oldPasswordMatch = await comparePasswordsVulnerable(
+      oldPassword,
+      userResult.password_hash,
+    );
+
+    if (!oldPasswordMatch) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Old password is incorrect" });
+    }
+
+    if (oldPassword === newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "New password must be different from old password",
+      });
+    }
+
+    // Validate new password against policy
+    const validation = validatePasswordPolicy(newPassword, config);
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: "New password does not meet requirements",
+        errors: validation.errors,
+      });
+    }
+
+    // VULNERABLE: Check password history with SQL injection
     const historyCheck = await checkPasswordHistory(
       userId,
       newPassword,
@@ -94,15 +130,13 @@ export default async function handler(
       });
     }
 
-    // VULNERABLE: Plain text password storage
-    const newHash = hashPasswordVulnerable(newPassword, "");
+    // VULNERABLE: Hash password using bcryptjs (same as secure)
+    const newHash = await hashPasswordVulnerable(newPassword);
 
-    // VULNERABLE: Direct string concatenation with potential SQL injection
-    // ATTACK EXAMPLE:
-    // newHash = "test'; DROP TABLE Users; --"
-    // This would execute: UPDATE Users SET password_hash = 'test'; DROP TABLE Users; --', ...
+    // VULNERABLE: SQL injection via string concatenation in UPDATE query
+    // Attack: If newHash contained quotes, it could break SQL syntax
+    // Example: newHash = "test'; DROP TABLE Users; --"
     const updateQuery = `UPDATE Users SET password_hash = '${newHash}', password_changed_date = CURRENT_TIMESTAMP WHERE id = ${userId}`;
-    console.log("[VULNERABLE DEBUG] Update query:", updateQuery);
 
     await db.run(updateQuery);
 
@@ -116,9 +150,10 @@ export default async function handler(
   } catch (error: any) {
     console.error("Change password error:", error);
 
+    // Generic error message (same as secure version)
     return res.status(500).json({
       success: false,
-      message: "Failed to change password: " + error.message,
+      message: "Failed to change password",
     });
   }
 }

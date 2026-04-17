@@ -41,12 +41,9 @@ export default function Login() {
       const data = await res.json();
 
       if (data.success) {
-        // VULNERABILITY: userId stored in localStorage - easily spoofable
-        // An attacker can set any userId value and access another user's profile
-        localStorage.setItem("userId", data.userId);
-
-        // VULNERABILITY: Session ID not stored securely
-        // Should be in HttpOnly cookie, not localStorage
+        // VULNERABLE: No localStorage needed with cookie-based auth
+        // Auth cookie is automatically set by server and sent with requests
+        // But still vulnerable to SQL injection attacks in backend
         setSuccess(true);
         setMessage("Login successful! Redirecting to dashboard...");
 
@@ -54,8 +51,7 @@ export default function Login() {
           router.push("/dashboard");
         }, 1500);
       } else {
-        // VULNERABILITY: Server timing can reveal if username exists (timing attacks)
-        // Different response times for "user not found" vs "invalid password"
+        // Error message from backend (matches secure version now)
         setSuccess(false);
         setMessage(data.message);
       }

@@ -1,7 +1,11 @@
-// VULNERABLE VERSION - No password hashing, direct SQL concatenation
+// VULNERABLE VERSION - SQL Injection & XSS vulnerabilities
+// Uses bcrypt for password hashing (same as secure) but vulnerable queries
 // This file demonstrates INSECURE authentication practices for educational purposes
 
+import bcryptjs from "bcryptjs";
 import crypto from "crypto";
+
+const SALT_ROUNDS = 12; // bcryptjs salt rounds for hashing
 
 /**
  * VULNERABLE: Generate password reset token without proper protection
@@ -11,35 +15,27 @@ export function generatePasswordResetToken(): string {
 }
 
 /**
- * VULNERABLE: Store password as plain text
- * WARNING: This is EXTREMELY insecure!
- *
- * WHY THIS IS VULNERABLE:
- * - If database is breached, all passwords are immediately compromised
- * - Anyone with database access can see all user passwords
- * - No protection against rainbow tables or dictionary attacks
- * - Violates GDPR, HIPAA, and all security standards
- *
- * WHAT ATTACKERS CAN DO:
- * - Use the passwords on other sites (password reuse is common)
- * - Impersonate users
- * - Access sensitive customer information
+ * Hash password using bcryptjs (same as secure version)
+ * NOTE: Password hashing is NOT the vulnerability in this project
+ * The vulnerabilities are SQL Injection and XSS, not password handling
  */
-export function hashPasswordVulnerable(password: string): string {
-  // VULNERABLE: Return plain text password
-  return password;
+export async function hashPasswordVulnerable(
+  password: string,
+): Promise<string> {
+  // Use bcryptjs like secure version - password protection is not the vulnerability
+  return bcryptjs.hash(password, SALT_ROUNDS);
 }
 
 /**
- * VULNERABLE: Compare plain text passwords
- * No protection against timing attacks
+ * Compare passwords safely with bcryptjs (same as secure version)
+ * NOTE: Password comparison is NOT the vulnerability in this project
  */
-export function comparePasswordsVulnerable(
+export async function comparePasswordsVulnerable(
   provided: string,
   stored: string,
-): boolean {
-  // VULNERABLE: Direct string comparison (timing attack possible)
-  return provided === stored;
+): Promise<boolean> {
+  // Use timing-safe comparison like secure version
+  return bcryptjs.compare(provided, stored);
 }
 
 /**
@@ -179,7 +175,10 @@ export async function checkPasswordHistory(
 
     // Check if new password matches any of the last N passwords
     for (const row of results) {
-      const isMatch = comparePasswordsVulnerable(password, row.password_hash);
+      const isMatch = await comparePasswordsVulnerable(
+        password,
+        row.password_hash,
+      );
       if (isMatch) {
         return {
           valid: false,

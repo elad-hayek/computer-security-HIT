@@ -7,7 +7,6 @@ import { useRouter } from "next/router";
 
 export default function ChangePassword() {
   const router = useRouter();
-  const [userId, setUserId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     oldPassword: "",
     newPassword: "",
@@ -26,12 +25,22 @@ export default function ChangePassword() {
   });
 
   useEffect(() => {
-    const storedUserId = localStorage.getItem("userId");
-    if (!storedUserId) {
-      router.push("/login");
-      return;
-    }
-    setUserId(storedUserId);
+    // VULNERABLE: Check auth by attempting to fetch profile
+    // If cookie is invalid/missing, endpoint returns 401
+    const verifyAuth = async () => {
+      try {
+        const response = await fetch("/api/user/profile", {
+          credentials: "include",
+        });
+        if (!response.ok) {
+          router.push("/login");
+        }
+      } catch (error) {
+        router.push("/login");
+      }
+    };
+
+    verifyAuth();
   }, [router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -58,22 +67,14 @@ export default function ChangePassword() {
     setErrors([]);
     setIsLoading(true);
 
-    if (!userId) {
-      setSuccess(false);
-      setMessage("User not authenticated");
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      // VULNERABILITY: oldPassword not verified in vulnerable API endpoint
-      // An attacker could change password without knowing current password
-      // by modifying the userId in localStorage to another user's ID
+      // VULNERABLE: Backend has SQL injection vulnerability
+      // Even with valid credentials, the API is vulnerable to SQLi attacks
       const res = await fetch("/api/auth/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
-          userId,
           oldPassword: formData.oldPassword,
           newPassword: formData.newPassword,
           confirmPassword: formData.confirmPassword,
@@ -113,9 +114,6 @@ export default function ChangePassword() {
     passwordValidation.hasDigit &&
     passwordValidation.hasSpecial;
 
-  if (!userId) {
-    return null;
-  }
 
   return (
     <div style={styles.container}>

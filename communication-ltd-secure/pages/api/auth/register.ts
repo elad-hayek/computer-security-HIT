@@ -5,6 +5,7 @@ import {
   hashPasswordSecure,
   addPasswordToHistory,
 } from "@/lib/auth";
+import { setAuthCookie } from "@/lib/cookies";
 import { getPasswordConfig, isWeakPassword } from "@/lib/passwordConfig";
 import { escape as htmlEscape } from "html-escaper";
 
@@ -117,6 +118,9 @@ export default async function handler(
     if (user) {
       // Add initial password to history
       await addPasswordToHistory(user.id, passwordHash, db);
+
+      // SECURE: Set HTTP-only cookie for authentication
+      setAuthCookie(res, user.id);
     }
 
     return res.status(201).json({

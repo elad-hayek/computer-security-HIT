@@ -1,12 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection, getAsync, runAsync } from "@/lib/db";
 import { comparePasswordsSecure } from "@/lib/auth";
+import { setAuthCookie } from "@/lib/cookies";
 import { getPasswordConfig } from "@/lib/passwordConfig";
 
 type ResponseData = {
   success: boolean;
   message: string;
-  user?: any;
 };
 
 /**
@@ -100,14 +100,12 @@ export default async function handler(
     const resetQuery = `UPDATE Users SET login_attempts = 0, locked_until = NULL WHERE id = ?`;
     await runAsync(db, resetQuery, [user.id]);
 
+    // SECURE: Set HTTP-only cookie for authentication
+    setAuthCookie(res, user.id);
+
     return res.status(200).json({
       success: true,
       message: `Login successful for user '${user.username}' (SECURE VERSION)`,
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-      },
     });
   } catch (error: any) {
     console.error("Login error:", error);

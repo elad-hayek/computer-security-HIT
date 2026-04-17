@@ -13,7 +13,6 @@ interface PasswordConfig {
 
 export default function ChangePassword() {
   const router = useRouter();
-  const [userId, setUserId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     oldPassword: "",
     newPassword: "",
@@ -39,14 +38,23 @@ export default function ChangePassword() {
   });
 
   useEffect(() => {
-    // Check for authentication
-    const storedUserId =
-      typeof window !== "undefined" ? localStorage.getItem("userId") : null;
-    if (!storedUserId) {
-      router.push("/login");
-    } else {
-      setUserId(Number(storedUserId));
-    }
+    // SECURE: Try to fetch profile to verify authentication
+    // If not authenticated, will redirect via API response
+    // No need to store userId in localStorage
+    const verifyAuth = async () => {
+      try {
+        const response = await fetch("/api/user/profile", {
+          credentials: "include",
+        });
+        if (!response.ok) {
+          router.push("/login");
+        }
+      } catch (error) {
+        router.push("/login");
+      }
+    };
+
+    verifyAuth();
   }, [router]);
 
   useEffect(() => {
@@ -95,10 +103,8 @@ export default function ChangePassword() {
       const res = await fetch("/api/auth/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          ...formData,
-        }),
+        credentials: "include",
+        body: JSON.stringify(formData),
       });
 
       const data = await res.json();

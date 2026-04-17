@@ -1,13 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection } from "@/lib/db";
 import { hashPasswordVulnerable, comparePasswordsVulnerable } from "@/lib/auth";
+import { setAuthCookie } from "@/lib/cookies";
 import { getPasswordConfig } from "@/lib/passwordConfig";
 
 type ResponseData = {
   success: boolean;
   message: string;
-  user?: any;
-  vulnerable_info?: string;
 };
 
 /**
@@ -55,19 +54,20 @@ export default async function handler(
   }
 
   try {
-    // VULNERABLE: Plain text password (from vulnerable registration)
-    const passwordHash = hashPasswordVulnerable(password, "");
+    // VULNERABLE: Hash password using bcryptjs (same as secure)
+    // Passwords are hashed, but the query is vulnerable to SQL injection
+    const passwordHash = await hashPasswordVulnerable(password);
 
-    // Load config for demonstration (but not enforced in vulnerable version)
+    // Load config
     const config = getPasswordConfig();
 
-    // VULNERABLE: Build query with string concatenation
-    // This allows SQL injection!
-    // Attack: username = "admin' OR '1'='1' --"
-    // Result: SELECT * FROM Users WHERE username = 'admin' OR '1'='1' --' AND password_hash = '...'
+    // VULNERABLE: Build query with string concatenation - SQL INJECTION POSSIBLE
+    // This allows SQL injection attacks!
+    // Attack examples:
+    //   username = "admin' --" bypasses password check
+    //   username = "' OR '1'='1' --" returns first user (often admin)
+    // The password_hash is also vulnerable if modified
     const query = `SELECT * FROM Users WHERE username = '${username}' AND password_hash = '${passwordHash}'`;
-
-    console.log("[DEBUG - VULNERABLE] Executing query:", query);
 
     const db = await getConnection();
 
@@ -75,40 +75,34 @@ export default async function handler(
     const result = await db.all(query);
 
     if (result.length === 0) {
-      // VULNERABLE: Doesn't check if attack was successful
-      // Attacker using "admin' --" might get admin account
+      // Generic error message (same as secure version)
+      // Note: Attackers can still use SQL injection to bypass this
       return res.status(401).json({
         success: false,
-        message: "Invalid username or password",
-        vulnerable_info:
-          'Try attack: username="admin\' --" to see SQL injection in action',
+        message: "Invalid credentials",
       });
     }
 
     const user = result[0];
 
-    // VULNERABLE: No rate limiting on failed attempts
-    // Account not locked after multiple failed logins
-    // Attacker can brute force passwords
+    // VULNERABLE: Set HTTP-only cookie (same mechanism as secure)
+    // The vulnerability is in the query, not the cookie handling
+    setAuthCookie(res, user.id);
 
     return res.status(200).json({
       success: true,
       message: `Login successful for user '${user.username}' (VULNERABLE VERSION)`,
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-      },
-      vulnerable_info: `[VULNERABLE] Logged in user: ${user.username}. Try SQL injection: admin' --`,
     });
   } catch (error: any) {
     console.error("Login error:", error);
 
-    // VULNERABLE: Reveals too much information
-    // Helps attackers understand database structure
+    // Generic error message (same as secure version)
+    // Don't reveal database details
     return res.status(500).json({
       success: false,
-      message: "Login failed: " + error.message,
+      message: "Login failed",
+    });
+  }
     });
   }
 }

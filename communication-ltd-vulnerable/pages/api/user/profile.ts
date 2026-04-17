@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection, get } from "@/lib/db";
+import { getAuthFromCookie } from "@/lib/cookies";
 
 type ResponseData = {
   success: boolean;
@@ -36,26 +37,24 @@ export default async function handler(
       .json({ success: false, message: "Method not allowed" });
   }
 
-  const { userId } = req.body;
-
+  // VULNERABLE: Extract userId from authentication cookie
+  const userId = getAuthFromCookie(req);
   if (!userId) {
-    return res
-      .status(400)
-      .json({ success: false, message: "User ID is required" });
+    return res.status(401).json({ success: false, message: "Unauthorized" });
   }
 
   try {
     const db = await getConnection();
 
-    // SECURE: Use parameterized query to fetch user profile
-    // WHY: SQLite treats ? as data placeholder, not code
-    // Returns only safe, non-sensitive fields
+    // VULNERABLE: SQL injection via string concatenation
+    // Even though userId is numeric from cookie, demonstrates vulnerability
+    // Attack: If userId could be a string, attacker could inject: userId = "1 OR 1=1"
     const profileQuery = `
       SELECT id, username, email, first_name, last_name, phone 
       FROM Users 
-      WHERE id = ?
+      WHERE id = ${userId}
     `;
-    const user = await get(db, profileQuery, [userId]);
+    const user = await get(db, profileQuery);
 
     if (!user) {
       return res

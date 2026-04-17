@@ -7,7 +7,6 @@ import { useRouter } from "next/router";
 
 export default function Dashboard() {
   const router = useRouter();
-  const [userId, setUserId] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<{
     username: string;
     email: string;
@@ -20,37 +19,31 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // VULNERABILITY: No session validation - userId could be spoofed
-    // An attacker could easily forge a userId in localStorage
-    const storedUserId = localStorage.getItem("userId");
-    if (!storedUserId) {
-      router.push("/login");
-      return;
-    }
-
-    // VULNERABILITY: No verification that this userId actually owns this session
-    // An attacker could change their userId in developer tools to access another user's data
-    setUserId(storedUserId);
-    fetchUserProfile(storedUserId);
+    // VULNERABLE: Check auth by attempting to fetch profile
+    // If cookie is invalid/missing, endpoint returns 401
+    fetchUserProfile();
   }, [router]);
 
-  const fetchUserProfile = async (userId: string) => {
+  const fetchUserProfile = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      // VULNERABILITY: If API returns unvalidated user data, could lead to:
-      // 1. Unauthorized access (no SSN/token validation in the endpoint)
-      // 2. XSS if data contains unescaped HTML (though React auto-escapes JSX)
-      // 3. No server-side session check - authentication is only client-side
+      // VULNERABLE: Send request with credentials (cookies)
+      // Data is received but NOT escaped when displayed (XSS vulnerability)
       const response = await fetch("/api/user/profile", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ userId }),
+        credentials: "include",
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          // Auth failed - redirect to login
+          router.push("/login");
+          return;
+        }
         throw new Error("Failed to fetch user profile");
       }
 
@@ -76,13 +69,16 @@ export default function Dashboard() {
   };
 
   const handleLogout = () => {
-    // VULNERABILITY: No cookie clearing on server side
-    // Only clearing localStorage - attackers could still use old sessions if cookies weren't HttpOnly
-    localStorage.removeItem("userId");
     setMessage("Logging out...");
-    setTimeout(() => {
-      router.push("/login");
-    }, 1000);
+    // Clear auth cookie via logout endpoint
+    fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "include",
+    }).then(() => {
+      setTimeout(() => {
+        router.push("/login");
+      }, 1000);
+    });
   };
 
   if (isLoading) {
@@ -93,10 +89,6 @@ export default function Dashboard() {
         </div>
       </div>
     );
-  }
-
-  if (!userId) {
-    return null;
   }
 
   return (
@@ -113,35 +105,38 @@ export default function Dashboard() {
             <div style={styles.userDetails}>
               <div style={styles.detailRow}>
                 <span style={styles.label}>Username:</span>
-                <span style={styles.value}>
-                  {/* VULNERABILITY: No verification that this user data belongs to the logged-in user */}
-                  {userInfo.username}
-                </span>
+                {/* VULNERABLE XSS: Username rendered as HTML without escaping */}
+                {/* Attack: Register with username = '<img src=x onerror="alert(\'XSS\')">' */}
+                <span
+                  style={styles.value}
+                  dangerouslySetInnerHTML={{ __html: userInfo.username }}
+                />
               </div>
               <div style={styles.detailRow}>
                 <span style={styles.label}>Email:</span>
-                <span style={styles.value}>{userInfo.email}</span>
+                {/* VULNERABLE XSS: Email rendered as HTML without escaping */}
+                <span
+                  style={styles.value}
+                  dangerouslySetInnerHTML={{ __html: userInfo.email }}
+                />
               </div>
               <div style={styles.detailRow}>
                 <span style={styles.label}>Full Name:</span>
-                <span style={styles.value}>
-                  {/* VULNERABILITY: Unsanitized user data could contain HTML/JS */}
-                  {userInfo.firstName && userInfo.lastName
-                    ? `${userInfo.firstName} ${userInfo.lastName}`
-                    : "Not provided"}
-                </span>
+                {/* VULNERABLE XSS: First/Last name rendered as HTML without escaping */}
+                <span
+                  style={styles.value}
+                  dangerouslySetInnerHTML={{
+                    __html:
+                      userInfo.firstName && userInfo.lastName
+                        ? `${userInfo.firstName} ${userInfo.lastName}`
+                        : "Not provided",
+                  }}
+                />
               </div>
               <div style={styles.detailRow}>
                 <span style={styles.label}>Phone:</span>
                 <span style={styles.value}>
                   {userInfo.phone || "Not provided"}
-                </span>
-              </div>
-              <div style={styles.detailRow}>
-                <span style={styles.label}>User ID:</span>
-                <span style={styles.value}>
-                  {/* VULNERABILITY: UserId directly from localStorage, not validated */}
-                  {userId}
                 </span>
               </div>
             </div>

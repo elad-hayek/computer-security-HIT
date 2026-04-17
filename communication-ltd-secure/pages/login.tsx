@@ -36,8 +36,9 @@ export default function Login() {
       if (data.success) {
         setIsError(false);
         setMessage("Login successful! Redirecting...");
+        // SECURE: No need to store userId in localStorage
+        // Auth cookie is automatically set by the server and sent with requests
         setTimeout(() => {
-          localStorage.setItem("userId", data.user.id);
           router.push("/dashboard");
         }, 1500);
       } else {

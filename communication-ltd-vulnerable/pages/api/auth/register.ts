@@ -5,7 +5,9 @@ import {
   hashPasswordVulnerable,
   addPasswordToHistory,
 } from "@/lib/auth";
+import { setAuthCookie } from "@/lib/cookies";
 import { getPasswordConfig, isWeakPassword } from "@/lib/passwordConfig";
+import { escape as htmlEscape } from "html-escaper";
 
 type ResponseData = {
   success: boolean;
@@ -47,13 +49,13 @@ export default async function handler(
   if (!username || !email || !password || !confirmPassword) {
     return res
       .status(400)
-      .json({ success: false, message: "Missing required fields" });
+      .json({ success: false, message: htmlEscape("Missing required fields") });
   }
 
   if (password !== confirmPassword) {
     return res
       .status(400)
-      .json({ success: false, message: "Passwords do not match" });
+      .json({ success: false, message: htmlEscape("Passwords do not match") });
   }
 
   // Get password policy from config file
@@ -64,49 +66,51 @@ export default async function handler(
   if (!validation.valid) {
     return res.status(400).json({
       success: false,
-      message: "Password does not meet requirements",
+      message: htmlEscape("Password does not meet requirements"),
       errors: validation.errors,
     });
   }
 
-  // VULNERABLE: Dictionary check without proper output encoding
+  // VULNERABLE: Dictionary check (but error is same as secure version)
   if (config.dictionaryCheckEnabled && isWeakPassword(password)) {
     return res.status(400).json({
       success: false,
-      message: "Password is too common. Please choose a more unique password.",
+      message: htmlEscape(
+        "Password is too common. Please choose a more unique password.",
+      ),
       errors: ["WEAK_PASSWORD"],
     });
   }
 
   try {
-    // VULNERABLE: No password hashing - just use plain text
-    // WHY THIS IS BAD: If DB is breached, all passwords are compromised
-    const passwordHash = password; // VULNERABLE: Plain text!
+    // VULNERABLE: Hash password using bcryptjs (same as secure)
+    // The vulnerability is in the SQL queries, not password hashing
+    const passwordHash = await hashPasswordVulnerable(password);
 
-    // VULNERABLE: Build query with string concatenation
-    // ATTACK EXAMPLE:
-    // username = "admin'); DROP TABLE Users; --"
-    // This would execute: INSERT INTO Users (...) VALUES ('admin'); DROP TABLE Users; --', ...)
-    //
-    // Or XSS via firstName:
-    // firstName = "<img src=x onerror='alert(1)'>"
-    // This would be stored as-is and executed later
+    // VULNERABLE: Build query with string concatenation - SQL INJECTION POSSIBLE
+    // This allows SQL injection attacks!
+    // Attack examples:
+    //   username = "admin'); DROP TABLE Users; --"
+    //   username = "' OR '1'='1'); INSERT INTO Users... --"
+    // Also XSS via firstName:
+    //   firstName = "<img src=x onerror='alert(1)'>"
     const query = `INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, created_date) VALUES ('${username}', '${email}', '${firstName || ""}', '${lastName || ""}', '${phone || ""}', '${passwordHash}', CURRENT_TIMESTAMP)`;
-
-    console.log("[DEBUG] Executing query:", query); // VULNERABLE: Shows SQL
 
     const db = await getConnection();
 
     // VULNERABLE: Direct string execution
     await db.run(query);
 
-    // Get the newly created user's ID to add to password history (with SQL injection)
+    // Get the newly created user's ID (with SQL injection vulnerability)
     const userQuery = `SELECT id FROM Users WHERE username = '${username}'`; // VULNERABLE!
     const user = await db.get(userQuery);
 
     if (user) {
       // VULNERABLE: Password history with SQL injection
       await addPasswordToHistory(user.id, passwordHash, db);
+
+      // VULNERABLE: Set HTTP-only cookie (same as secure)
+      setAuthCookie(res, user.id);
     }
 
     return res.status(201).json({
@@ -126,9 +130,10 @@ export default async function handler(
         .json({ success: false, message: "Username or email already exists" });
     }
 
+    // Generic error message (same as secure version)
     return res.status(500).json({
       success: false,
-      message: "Registration failed: " + error.message,
+      message: "Registration failed",
     });
   }
 }

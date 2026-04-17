@@ -4,7 +4,6 @@ import { useRouter } from "next/router";
 
 export default function Dashboard() {
   const router = useRouter();
-  const [userId, setUserId] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<{
     username: string;
     email: string;
@@ -17,28 +16,32 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const storedUserId = localStorage.getItem("userId");
-    if (!storedUserId) {
-      router.push("/login");
-      return;
-    }
-
-    setUserId(storedUserId);
-    fetchUserProfile(storedUserId);
+    // SECURE: Check auth by attempting to fetch profile
+    // If cookie is invalid/missing, the endpoint will return 401
+    // No need to check localStorage anymore
+    fetchUserProfile();
   }, [router]);
 
-  const fetchUserProfile = async (userId: string) => {
+  const fetchUserProfile = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch(`/api/user/profile?userId=${userId}`, {
+      // SECURE: No userId parameter needed - auth via cookie
+      // Credentials: include tells fetch to send cookies with the request
+      const response = await fetch(`/api/user/profile`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          // Auth failed - redirect to login
+          router.push("/login");
+          return;
+        }
         throw new Error("Failed to fetch user profile");
       }
 
@@ -64,11 +67,16 @@ export default function Dashboard() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("userId");
     setMessage("Logging out...");
-    setTimeout(() => {
-      router.push("/login");
-    }, 1000);
+    // SECURE: Call logout endpoint to clear auth cookie
+    fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "include",
+    }).then(() => {
+      setTimeout(() => {
+        router.push("/login");
+      }, 1000);
+    });
   };
 
   if (isLoading) {
@@ -79,10 +87,6 @@ export default function Dashboard() {
         </div>
       </div>
     );
-  }
-
-  if (!userId) {
-    return null;
   }
 
   return (

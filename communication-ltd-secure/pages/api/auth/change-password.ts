@@ -7,6 +7,7 @@ import {
   checkPasswordHistory,
   addPasswordToHistory,
 } from "@/lib/auth";
+import { getAuthFromCookie } from "@/lib/cookies";
 import { getPasswordConfig } from "@/lib/passwordConfig";
 
 type ResponseData = {
@@ -35,9 +36,15 @@ export default async function handler(
       .json({ success: false, message: "Method not allowed" });
   }
 
-  const { userId, oldPassword, newPassword, confirmPassword } = req.body;
+  const { oldPassword, newPassword, confirmPassword } = req.body;
 
-  if (!userId || !oldPassword || !newPassword || !confirmPassword) {
+  // SECURE: Extract userId from authentication cookie (not from request body)
+  const userId = getAuthFromCookie(req);
+  if (!userId) {
+    return res.status(401).json({ success: false, message: "Unauthorized" });
+  }
+
+  if (!oldPassword || !newPassword || !confirmPassword) {
     return res
       .status(400)
       .json({ success: false, message: "Missing required fields" });
