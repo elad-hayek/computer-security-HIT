@@ -34,20 +34,16 @@ export default function Login() {
       const data = await res.json();
 
       if (data.success) {
-        // VULNERABLE: No localStorage needed with cookie-based auth
-        // Auth cookie is automatically set by server and sent with requests
-        // But still vulnerable to SQL injection attacks in backend
         setIsError(false);
-        setMessage("Login successful! Redirecting to dashboard...");
-
+        setMessage("Login successful! Redirecting...");
+        // SECURE: No need to store userId in localStorage
+        // Auth cookie is automatically set by the server and sent with requests
         setTimeout(() => {
-          localStorage.setItem("userId", data.user.id);
           router.push("/dashboard");
         }, 1500);
       } else {
-        // Error message from backend (matches secure version now)
         setIsError(true);
-        setMessage(data.message);
+        setMessage(data.message || "Login failed");
       }
     } catch (error: any) {
       setIsError(true);

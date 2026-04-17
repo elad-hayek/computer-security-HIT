@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection } from "@/lib/db";
 import {
   validatePasswordPolicy,
-  hashPasswordVulnerable,
+  hashPasswordSecure,
   addPasswordToHistory,
 } from "@/lib/auth";
 import { setAuthCookie } from "@/lib/cookies";
@@ -85,7 +85,7 @@ export default async function handler(
   try {
     // VULNERABLE: Hash password using bcryptjs (same as secure)
     // The vulnerability is in the SQL queries, not password hashing
-    const passwordHash = await hashPasswordVulnerable(password);
+    const passwordHash = await hashPasswordSecure(password);
 
     // VULNERABLE: Build query with string concatenation - SQL INJECTION POSSIBLE
     // This allows SQL injection attacks!
@@ -115,7 +115,7 @@ export default async function handler(
 
     return res.status(201).json({
       success: true,
-      message: "User registered successfully",
+      message: `User '${username}' registered successfully`,
     });
   } catch (error: any) {
     console.error("Registration error:", error);

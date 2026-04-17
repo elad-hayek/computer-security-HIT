@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection, allAsync } from "@/lib/db";
-import { hashPasswordVulnerable } from "@/lib/auth";
+import { hashPasswordSecure } from "@/lib/auth";
 import { setAuthCookie } from "@/lib/cookies";
 
 type ResponseData = {
@@ -55,7 +55,7 @@ export default async function handler(
   try {
     // VULNERABLE: Hash password using bcryptjs (same as secure)
     // Passwords are hashed, but the query is vulnerable to SQL injection
-    const passwordHash = await hashPasswordVulnerable(password);
+    const passwordHash = await hashPasswordSecure(password);
 
     // VULNERABLE: Build query with string concatenation - SQL INJECTION POSSIBLE
     // This allows SQL injection attacks!
@@ -87,7 +87,7 @@ export default async function handler(
 
     return res.status(200).json({
       success: true,
-      message: `Login successful for user '${user.username}' (VULNERABLE VERSION)`,
+      message: "Login successful",
     });
   } catch (error: any) {
     console.error("Login error:", error);

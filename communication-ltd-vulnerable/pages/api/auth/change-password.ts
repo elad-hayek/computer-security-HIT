@@ -2,8 +2,8 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection } from "@/lib/db";
 import {
   validatePasswordPolicy,
-  hashPasswordVulnerable,
-  comparePasswordsVulnerable,
+  hashPasswordSecure,
+  comparePasswordsSecure,
   checkPasswordHistory,
   addPasswordToHistory,
 } from "@/lib/auth";
@@ -57,16 +57,10 @@ export default async function handler(
       .json({ success: false, message: "New passwords do not match" });
   }
 
-  // Get password policy from config
-  const config = getPasswordConfig();
-
-  // Validate new password against policy
-  const validation = validatePasswordPolicy(newPassword, config);
-  if (!validation.valid) {
+  if (oldPassword === newPassword) {
     return res.status(400).json({
       success: false,
-      message: "New password does not meet requirements",
-      errors: validation.errors,
+      message: "New password must be different from old password",
     });
   }
 
@@ -87,7 +81,7 @@ export default async function handler(
 
     // VULNERABLE: Verify old password using bcryptjs (same as secure version for consistency)
     // This ensures only the real user can change their password
-    const oldPasswordMatch = await comparePasswordsVulnerable(
+    const oldPasswordMatch = await comparePasswordsSecure(
       oldPassword,
       userResult.password_hash,
     );
@@ -98,12 +92,8 @@ export default async function handler(
         .json({ success: false, message: "Old password is incorrect" });
     }
 
-    if (oldPassword === newPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "New password must be different from old password",
-      });
-    }
+    // Get password policy from config
+    const config = getPasswordConfig();
 
     // Validate new password against policy
     const validation = validatePasswordPolicy(newPassword, config);
@@ -131,7 +121,7 @@ export default async function handler(
     }
 
     // VULNERABLE: Hash password using bcryptjs (same as secure)
-    const newHash = await hashPasswordVulnerable(newPassword);
+    const newHash = await hashPasswordSecure(newPassword);
 
     // VULNERABLE: SQL injection via string concatenation in UPDATE query
     // Attack: If newHash contained quotes, it could break SQL syntax

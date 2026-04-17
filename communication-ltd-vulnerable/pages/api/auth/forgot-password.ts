@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection } from "@/lib/db";
 import {
   validatePasswordPolicy,
-  hashPasswordVulnerable,
+  hashPasswordSecure,
   checkPasswordHistory,
   addPasswordToHistory,
 } from "@/lib/auth";
@@ -230,7 +230,7 @@ async function handleResetPassword(
     // Users can reuse old passwords
 
     // VULNERABILITY: Weak password hashing (plain text or weak hash)
-    const newHash = hashPasswordVulnerable(newPassword, "");
+    const newHash = await hashPasswordSecure(newPassword);
 
     // VULNERABILITY: SQL Injection in update query
     const updateQuery = `UPDATE Users SET password_hash = '${newHash}', password_changed_date = CURRENT_TIMESTAMP WHERE id = ${codeData.user_id}`;

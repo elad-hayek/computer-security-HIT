@@ -8,33 +8,36 @@ import crypto from "crypto";
 const SALT_ROUNDS = 12; // bcryptjs salt rounds for hashing
 
 /**
- * VULNERABLE: Generate password reset token without proper protection
+ * SECURE: Hash password using bcryptjs
+ * WHY THIS IS SECURE:
+ * - Uses bcryptjs algorithm (adaptive and slowing)
+ * - Resists brute force attacks through salt + rounds
+ * - Even with modern GPU, takes significant time to break
+ * - OWASP and NIST recommended
+ *
+ * IMPLEMENTATION:
+ * - Salt rounds = 12 (configurable for performance/security balance)
+ * - Each round doubles the time to hash
+ * - Recommended: 10-12 rounds (updates as computers get faster)
  */
-export function generatePasswordResetToken(): string {
-  return crypto.randomBytes(32).toString("hex");
-}
-
-/**
- * Hash password using bcryptjs (same as secure version)
- * NOTE: Password hashing is NOT the vulnerability in this project
- * The vulnerabilities are SQL Injection and XSS, not password handling
- */
-export async function hashPasswordVulnerable(
-  password: string,
-): Promise<string> {
-  // Use bcryptjs like secure version - password protection is not the vulnerability
+export async function hashPasswordSecure(password: string): Promise<string> {
+  // bcryptjs automatically generates and includes salt in the hash
+  // Format: $2a$12$...
   return bcryptjs.hash(password, SALT_ROUNDS);
 }
 
 /**
- * Compare passwords safely with bcryptjs (same as secure version)
- * NOTE: Password comparison is NOT the vulnerability in this project
+ * SECURE: Compare passwords safely
+ * WHY THIS IS SECURE:
+ * - Uses timing-safe comparison (bcryptjs.compare)
+ * - Prevents timing attacks where attacker measures response time
+ * - Always takes roughly same time regardless of match position
  */
-export async function comparePasswordsVulnerable(
+export async function comparePasswordsSecure(
   provided: string,
   stored: string,
 ): Promise<boolean> {
-  // Use timing-safe comparison like secure version
+  // SECURE: bcryptjs.compare is timing-safe
   return bcryptjs.compare(provided, stored);
 }
 
@@ -86,33 +89,6 @@ export function validatePasswordPolicy(
 }
 
 /**
- * Build vulnerable SQL queries with string concatenation
- * VULNERABLE: SQL Injection attacks possible
- */
-/**
- * Build vulnerable SQL queries with string concatenation
- * VULNERABLE: SQL Injection attacks possible
- */
-export function buildVulnerableLoginQuery(
-  username: string,
-  password: string,
-): string {
-  // VULNERABLE: Direct string concatenation
-  // Attack example: username = "admin' --" bypasses password check
-  return `SELECT * FROM Users WHERE username = '${username}' AND password_hash = '${password}'`;
-}
-
-export function buildVulnerableRegisterQuery(
-  username: string,
-  email: string,
-  passwordHash: string,
-): string {
-  // VULNERABLE: Direct string concatenation
-  // Attack example: username = "' OR '1'='1'; DROP TABLE Users; --"
-  return `INSERT INTO Users (username, email, password_hash, created_date) VALUES ('${username}', '${email}', '${passwordHash}', CURRENT_TIMESTAMP)`;
-}
-
-/**
  * SECURE: Check if password is in weak password dictionary
  * SECURITY: Dictionary attack prevention
  */
@@ -161,10 +137,7 @@ export async function checkPasswordHistory(
 
     // Check if new password matches any of the last N passwords
     for (const row of results) {
-      const isMatch = await comparePasswordsVulnerable(
-        password,
-        row.password_hash,
-      );
+      const isMatch = await comparePasswordsSecure(password, row.password_hash);
       if (isMatch) {
         return {
           valid: false,
@@ -202,67 +175,10 @@ export async function addPasswordToHistory(
   }
 }
 
-/**
- * VULNERABLE: Legacy validation using JSON approach with SQL injection
- */
-export async function validatePasswordHistory(
-  userId: number,
-  password: string,
-  db: any,
-): Promise<{ valid: boolean; reason?: string }> {
-  try {
-    const { getPasswordConfig } = require("./passwordConfig");
-    const config = getPasswordConfig();
-
-    // VULNERABLE: String concatenation
-    const userQuery = `SELECT password_history FROM Users WHERE id = ${userId}`;
-    const result = await db.get(userQuery);
-
-    if (!result || !result.password_history) {
-      return { valid: true };
-    }
-
-    const passwordHashes: string[] = JSON.parse(
-      result.password_history || "[]",
-    );
-
-    for (const oldHash of passwordHashes) {
-      const isMatch = comparePasswordsVulnerable(password, oldHash);
-      if (isMatch) {
-        return {
-          valid: false,
-          reason: `Cannot reuse a password from the last ${config.passwordHistory} times.`,
-        };
-      }
-    }
-
-    return { valid: true };
-  } catch (error) {
-    console.error("Error validating password history:", error);
-    return { valid: true };
-  }
-}
-
-/**
- * VULNERABLE: Legacy function
- */
-export async function addToPasswordHistory(
-  userId: number,
-  passwordHash: string,
-  db: any,
-): Promise<void> {
-  return addPasswordToHistory(userId, passwordHash, db);
-}
-
 export default {
-  generatePasswordResetToken,
-  hashPasswordVulnerable,
-  comparePasswordsVulnerable,
+  hashPasswordSecure,
+  comparePasswordsSecure,
   validatePasswordPolicy,
   checkPasswordHistory,
   addPasswordToHistory,
-  buildVulnerableLoginQuery,
-  buildVulnerableRegisterQuery,
-  validatePasswordHistory,
-  addToPasswordHistory,
 };
