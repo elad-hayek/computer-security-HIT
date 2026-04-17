@@ -2,9 +2,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 
-// VULNERABLE VERSION - Educational Purpose Only
-// This version demonstrates session and input validation vulnerabilities
-
 export default function Login() {
   const router = useRouter();
   const [formData, setFormData] = useState({
@@ -13,14 +10,12 @@ export default function Login() {
   });
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [isError, setIsError] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    // VULNERABILITY: No input validation - SQL injection possible on backend
     setFormData({
       ...formData,
-      [name]: value,
+      [e.target.name]: e.target.value,
     });
   };
 
@@ -30,8 +25,6 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // VULNERABILITY: Username/password sent unsanitized to API
-      // Backend is vulnerable to SQL injection
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -48,6 +41,7 @@ export default function Login() {
         setMessage("Login successful! Redirecting to dashboard...");
 
         setTimeout(() => {
+          localStorage.setItem("userId", data.user.id);
           router.push("/dashboard");
         }, 1500);
       } else {
@@ -56,21 +50,19 @@ export default function Login() {
         setMessage(data.message);
       }
     } catch (error: any) {
-      // VULNERABILITY: Detailed error messages shown to attackers
-      setSuccess(false);
+      setIsError(true);
       setMessage("Error: " + error.message);
     } finally {
       setIsLoading(false);
     }
   };
 
+
   return (
     <div style={styles.container}>
       <div style={styles.card}>
         <h1>Login - Communication_LTD</h1>
-        <p style={styles.vulnerable}>
-          ⚠ VULNERABLE VERSION - Security Flaws Demonstrated
-        </p>
+        <p style={styles.vulnerable}>⚠ VULNERABLE VERSION - Educational Purpose</p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <input
@@ -82,7 +74,6 @@ export default function Login() {
             required
             style={styles.input}
             disabled={isLoading}
-            autoComplete="username"
           />
 
           <input
@@ -94,7 +85,6 @@ export default function Login() {
             required
             style={styles.input}
             disabled={isLoading}
-            autoComplete="current-password"
           />
 
           <button type="submit" style={styles.button} disabled={isLoading}>
@@ -106,24 +96,26 @@ export default function Login() {
           <div
             style={{
               ...styles.message,
-              color: success ? "green" : "red",
+              color: isError ? "red" : "green",
             }}
           >
-            {/* VULNERABILITY: Message not sanitized */}
             {message}
-          </div
+          </div>
         )}
 
         <div style={styles.links}>
-          <Link href="/forgot-password">Forgot Password?</Link>
-          <span> | </span>
-          <Link href="/register">Register</Link>
+          <p>
+            Don't have an account? <Link href="/register">Register here</Link>
+          </p>
+          <p>
+            Forgot your password?{" "}
+            <Link href="/forgot-password">Reset it here</Link>
+          </p>
         </div>
 
         <p style={styles.note}>
-          🔴 VULNERABLE: Backend SQL injection in login query. SessionId in
-          localStorage (spoofable). No timing-safe comparison. Plain-text
-          password saved in intercepted requests. No rate limiting.
+          🔴 VULNERABLE: SQL injection in backend query. No rate limiting.
+          Session in localStorage (spoofable). No timing-safe password comparison.
         </p>
       </div>
     </div>
@@ -137,7 +129,6 @@ const styles = {
     alignItems: "center",
     minHeight: "100vh",
     backgroundColor: "#f5f5f5",
-    padding: "10px",
   },
   card: {
     backgroundColor: "white",
@@ -165,7 +156,7 @@ const styles = {
   },
   button: {
     padding: "10px",
-    backgroundColor: "#d32f2f",
+    backgroundColor: "#2196F3",
     color: "white",
     border: "none",
     borderRadius: "4px",
@@ -181,8 +172,8 @@ const styles = {
   },
   links: {
     marginTop: "15px",
-    textAlign: "center" as const,
     fontSize: "14px",
+    textAlign: "center" as const,
   },
   note: {
     marginTop: "20px",

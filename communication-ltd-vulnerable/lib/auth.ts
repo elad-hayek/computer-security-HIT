@@ -112,20 +112,6 @@ export function buildVulnerableRegisterQuery(
   return `INSERT INTO Users (username, email, password_hash, created_date) VALUES ('${username}', '${email}', '${passwordHash}', CURRENT_TIMESTAMP)`;
 }
 
-export function buildVulnerableCustomerQuery(
-  userId: number,
-  firstName: string,
-  lastName: string,
-  phone: string,
-  email: string,
-  sector: string,
-  package: string,
-): string {
-  // VULNERABLE: Direct string concatenation with user input
-  // XSS risk when data is retrieved: firstName = "<img src=x onerror='alert(1)'>"
-  return `INSERT INTO Customers (user_id, first_name, last_name, phone, email, sector, subscription_package, created_date) VALUES (${userId}, '${firstName}', '${lastName}', '${phone}', '${email}', '${sector}', '${package}', CURRENT_TIMESTAMP)`;
-}
-
 /**
  * SECURE: Check if password is in weak password dictionary
  * SECURITY: Dictionary attack prevention
@@ -277,7 +263,6 @@ export default {
   addPasswordToHistory,
   buildVulnerableLoginQuery,
   buildVulnerableRegisterQuery,
-  buildVulnerableCustomerQuery,
   validatePasswordHistory,
   addToPasswordHistory,
 };

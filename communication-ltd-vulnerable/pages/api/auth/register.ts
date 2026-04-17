@@ -115,7 +115,7 @@ export default async function handler(
 
     return res.status(201).json({
       success: true,
-      message: `User '${username}' registered successfully`,
+      message: "User registered successfully",
     });
   } catch (error: any) {
     console.error("Registration error:", error);

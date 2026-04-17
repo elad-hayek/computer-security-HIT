@@ -19,13 +19,10 @@ type ResponseData = {
  * VULNERABLE User Profile API Endpoint
  * GET /api/user/profile
  *
- * Retrieves authenticated user profile data from the database
- *
- * SECURITY FEATURES:
- * 1. Parameterized queries prevent SQL injection
- * 2. Returns only basic user fields (excludes sensitive data like login_attempts, locked_until)
- * 3. Validates userId is provided
- * 4. Generic error messages (no information leakage)
+ * VULNERABILITIES:
+ * 1. SQL Injection via string concatenation (userId parameter)
+ * 2. No session validation - any userId accepted from client
+ * 3. No verification that userId belongs to authenticated user
  */
 export default async function handler(
   req: NextApiRequest,

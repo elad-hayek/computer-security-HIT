@@ -2,11 +2,10 @@
   "compilerOptions": {
     "target": "es2020",
     "useDefineForClassFields": true,
-    "lib": [
-      "es2020",
-      "dom",
-      "dom.iterable"
-    ],
+    "lib": ["es2020", "dom", "dom.iterable"],
+    "paths": {
+      "@/*": ["./*"]
+    },
     "module": "esnext",
     "skipLibCheck": true,
     "esModuleInterop": true,
@@ -26,10 +25,6 @@
     "allowJs": true,
     "incremental": true
   },
-  "include": [
-    "src"
-  ],
-  "exclude": [
-    "node_modules"
-  ]
+  "include": ["src"],
+  "exclude": ["node_modules"]
 }

@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-
-// VULNERABLE VERSION - Educational Purpose Only
-// This version demonstrates password change vulnerabilities
+import Cookies from "js-cookie";
+import type { PasswordConfig } from "@/lib/passwordConfig";
 
 export default function ChangePassword() {
   const router = useRouter();
@@ -16,6 +15,13 @@ export default function ChangePassword() {
   const [errors, setErrors] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [passwordConfig, setPasswordConfig] = useState<PasswordConfig>({
+    minLength: 10,
+    requireUppercase: true,
+    requireLowercase: true,
+    requireDigits: true,
+    requireSpecialChars: true,
+  });
   const [passwordValidation, setPasswordValidation] = useState({
     minLength: false,
     hasUppercase: false,
@@ -43,6 +49,22 @@ export default function ChangePassword() {
     verifyAuth();
   }, [router]);
 
+  useEffect(() => {
+    const fetchPasswordConfig = async () => {
+      try {
+        const res = await fetch("/api/config/password");
+        const data = await res.json();
+        if (data.success && data.config) {
+          setPasswordConfig(data.config);
+        }
+      } catch (error) {
+        console.error("Failed to fetch password config:", error);
+      }
+    };
+
+    fetchPasswordConfig();
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData({
@@ -52,7 +74,7 @@ export default function ChangePassword() {
 
     if (name === "newPassword") {
       setPasswordValidation({
-        minLength: value.length >= 10,
+        minLength: value.length >= passwordConfig.minLength,
         hasUppercase: /[A-Z]/.test(value),
         hasLowercase: /[a-z]/.test(value),
         hasDigit: /\d/.test(value),
@@ -85,7 +107,7 @@ export default function ChangePassword() {
 
       if (data.success) {
         setSuccess(true);
-        setMessage("Password changed successfully! Redirecting...");
+        setMessage("Password changed successfully!");
         setFormData({
           oldPassword: "",
           newPassword: "",
@@ -107,37 +129,40 @@ export default function ChangePassword() {
     }
   };
 
-  const isPasswordValid =
-    passwordValidation.minLength &&
-    passwordValidation.hasUppercase &&
-    passwordValidation.hasLowercase &&
-    passwordValidation.hasDigit &&
-    passwordValidation.hasSpecial;
-
+  const isPasswordValid = (() => {
+    if (passwordConfig.minLength && !passwordValidation.minLength) return false;
+    if (passwordConfig.requireUppercase && !passwordValidation.hasUppercase)
+      return false;
+    if (passwordConfig.requireLowercase && !passwordValidation.hasLowercase)
+      return false;
+    if (passwordConfig.requireDigits && !passwordValidation.hasDigit)
+      return false;
+    if (passwordConfig.requireSpecialChars && !passwordValidation.hasSpecial)
+      return false;
+    return true;
+  })();
 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
         <h1>Change Password - Communication_LTD</h1>
         <p style={styles.vulnerable}>
-          ⚠ VULNERABLE VERSION - Security Flaws Demonstrated
+          ⚠ VULNERABLE VERSION - Educational Purpose
         </p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
-          <div style={styles.section}>
-            {/* VULNERABILITY: oldPassword field present but not validated on backend */}
-            {/* The vulnerable endpoint doesn't check this field */}
-            <input
-              type="password"
-              name="oldPassword"
-              placeholder="Current Password (ignored by vulnerable backend)"
-              value={formData.oldPassword}
-              onChange={handleChange}
-              required
-              style={styles.input}
-              disabled={isLoading}
-            />
+          <input
+            type="password"
+            name="oldPassword"
+            placeholder="Current Password"
+            value={formData.oldPassword}
+            onChange={handleChange}
+            required
+            style={styles.input}
+            disabled={isLoading}
+          />
 
+          <div style={styles.section}>
             <input
               type="password"
               name="newPassword"
@@ -151,46 +176,56 @@ export default function ChangePassword() {
 
             <div style={styles.passwordRequirements}>
               <p style={{ margin: "5px 0" }}>Password Requirements:</p>
-              <div
-                style={{
-                  ...styles.requirement,
-                  color: passwordValidation.minLength ? "green" : "gray",
-                }}
-              >
-                At least 10 characters
-              </div>
-              <div
-                style={{
-                  ...styles.requirement,
-                  color: passwordValidation.hasUppercase ? "green" : "gray",
-                }}
-              >
-                Uppercase letter
-              </div>
-              <div
-                style={{
-                  ...styles.requirement,
-                  color: passwordValidation.hasLowercase ? "green" : "gray",
-                }}
-              >
-                Lowercase letter
-              </div>
-              <div
-                style={{
-                  ...styles.requirement,
-                  color: passwordValidation.hasDigit ? "green" : "gray",
-                }}
-              >
-                Digit
-              </div>
-              <div
-                style={{
-                  ...styles.requirement,
-                  color: passwordValidation.hasSpecial ? "green" : "gray",
-                }}
-              >
-                Special character
-              </div>
+              {passwordConfig.minLength > 0 && (
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.minLength ? "green" : "gray",
+                  }}
+                >
+                  At least {passwordConfig.minLength} characters
+                </div>
+              )}
+              {passwordConfig.requireUppercase && (
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.hasUppercase ? "green" : "gray",
+                  }}
+                >
+                  Uppercase letter
+                </div>
+              )}
+              {passwordConfig.requireLowercase && (
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.hasLowercase ? "green" : "gray",
+                  }}
+                >
+                  Lowercase letter
+                </div>
+              )}
+              {passwordConfig.requireDigits && (
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.hasDigit ? "green" : "gray",
+                  }}
+                >
+                  Digit
+                </div>
+              )}
+              {passwordConfig.requireSpecialChars && (
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.hasSpecial ? "green" : "gray",
+                  }}
+                >
+                  Special character
+                </div>
+              )}
             </div>
           </div>
 
@@ -244,9 +279,9 @@ export default function ChangePassword() {
         </p>
 
         <p style={styles.note}>
-          🔴 VULNERABLE: Backend doesn't verify old password. SQL injection in
-          password history check. No verification that userId in localStorage
-          matches actual session. Password not hashed securely.
+          🔴 VULNERABLE: Old password field not validated on backend. SQL
+          injection in password operations. No password history check. Passwords
+          not hashed securely.
         </p>
       </div>
     </div>
@@ -293,7 +328,7 @@ const styles = {
   },
   passwordRequirements: {
     padding: "10px",
-    backgroundColor: "#fff3e0",
+    backgroundColor: "#f9f9f9",
     borderRadius: "4px",
     fontSize: "12px",
   },
@@ -303,7 +338,7 @@ const styles = {
   },
   button: {
     padding: "10px",
-    backgroundColor: "#d32f2f",
+    backgroundColor: "#2196F3",
     color: "white",
     border: "none",
     borderRadius: "4px",
