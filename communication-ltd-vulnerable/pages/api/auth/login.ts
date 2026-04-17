@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection, allAsync } from "@/lib/db";
-import { hashPasswordSecure } from "@/lib/auth";
+import { comparePasswordsSecure } from "@/lib/auth";
 import { setAuthCookie } from "@/lib/cookies";
 
 type ResponseData = {
@@ -55,17 +55,14 @@ export default async function handler(
   try {
     // VULNERABLE: Hash password using bcryptjs (same as secure)
     // Passwords are hashed, but the query is vulnerable to SQL injection
-    const passwordHash = await hashPasswordSecure(password);
+    const db = await getConnection();
 
     // VULNERABLE: Build query with string concatenation - SQL INJECTION POSSIBLE
     // This allows SQL injection attacks!
     // Attack examples:
     //   username = "admin' --" bypasses password check
     //   username = "' OR '1'='1' --" returns first user (often admin)
-    // The password_hash is also vulnerable if modified
-    const query = `SELECT * FROM Users WHERE username = '${username}' AND password_hash = '${passwordHash}'`;
-
-    const db = await getConnection();
+    const query = `SELECT * FROM Users WHERE username = '${username}'`;
 
     // VULNERABLE: Direct string query with concatenation
     const result = await allAsync(db, query);
@@ -80,6 +77,17 @@ export default async function handler(
     }
 
     const user = result[0];
+
+    // FIXED: Now using proper bcryptjs comparison instead of hashing in the query
+    // This prevents the logic bug that made login impossible
+    const passwordMatch = await comparePasswordsSecure(password, user.password_hash);
+
+    if (!passwordMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials",
+      });
+    }
 
     // VULNERABLE: Set HTTP-only cookie (same mechanism as secure)
     // The vulnerability is in the query, not the cookie handling
