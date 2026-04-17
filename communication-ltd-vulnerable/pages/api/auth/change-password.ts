@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection } from "@/lib/db";
+import { getConnection, getAsync, runAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
   hashPasswordSecure,
@@ -71,7 +71,7 @@ export default async function handler(
     // Even though userId is numeric from cookie, the pattern demonstrates vulnerability
     const userQuery = `SELECT id, password_hash FROM Users WHERE id = ${userId}`;
 
-    const userResult = await db.get(userQuery);
+    const userResult = await getAsync(db, userQuery);
 
     if (!userResult) {
       return res
@@ -128,7 +128,7 @@ export default async function handler(
     // Example: newHash = "test'; DROP TABLE Users; --"
     const updateQuery = `UPDATE Users SET password_hash = '${newHash}', password_changed_date = CURRENT_TIMESTAMP WHERE id = ${userId}`;
 
-    await db.run(updateQuery);
+    await runAsync(db, updateQuery);
 
     // VULNERABLE: Add password to history with SQL injection
     await addPasswordToHistory(userId, newHash, db);

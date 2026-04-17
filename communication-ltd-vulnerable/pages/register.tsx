@@ -22,6 +22,7 @@ export default function Register() {
     requireLowercase: true,
     requireDigits: true,
     requireSpecialChars: true,
+    
   });
   const [passwordValidation, setPasswordValidation] = useState({
     minLength: false,

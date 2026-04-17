@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection } from "@/lib/db";
+import { getConnection, runAsync, getAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
   hashPasswordSecure,
@@ -99,11 +99,11 @@ export default async function handler(
     const db = await getConnection();
 
     // VULNERABLE: Direct string execution
-    await db.run(query);
+    await runAsync(db, query);
 
     // Get the newly created user's ID (with SQL injection vulnerability)
     const userQuery = `SELECT id FROM Users WHERE username = '${username}'`; // VULNERABLE!
-    const user = await db.get(userQuery);
+    const user = await getAsync(db, userQuery);
 
     if (user) {
       // VULNERABLE: Password history with SQL injection

@@ -11,36 +11,27 @@ let db: sqlite3.Database | null = null;
 function runAsync(
   database: sqlite3.Database,
   sql: string,
-  params: any[] = [],
 ): Promise<{ lastID?: number; changes?: number }> {
   return new Promise((resolve, reject) => {
-    database.run(sql, params, function (err) {
+    database.run(sql, function (err) {
       if (err) reject(err);
       else resolve({ lastID: this.lastID, changes: this.changes });
     });
   });
 }
 
-function getAsync(
-  database: sqlite3.Database,
-  sql: string,
-  params: any[] = [],
-): Promise<any> {
+function getAsync(database: sqlite3.Database, sql: string): Promise<any> {
   return new Promise((resolve, reject) => {
-    database.get(sql, params, (err, row) => {
+    database.get(sql, (err, row) => {
       if (err) reject(err);
       else resolve(row);
     });
   });
 }
 
-function allAsync(
-  database: sqlite3.Database,
-  sql: string,
-  params: any[] = [],
-): Promise<any[]> {
+function allAsync(database: sqlite3.Database, sql: string): Promise<any[]> {
   return new Promise((resolve, reject) => {
-    database.all(sql, params, (err, rows) => {
+    database.all(sql, (err, rows) => {
       if (err) reject(err);
       else resolve(rows || []);
     });

@@ -4,6 +4,7 @@
 
 import bcryptjs from "bcryptjs";
 import crypto from "crypto";
+import { allAsync, runAsync } from "./db";
 
 const SALT_ROUNDS = 12; // bcryptjs salt rounds for hashing
 
@@ -133,7 +134,7 @@ export async function checkPasswordHistory(
       ORDER BY created_date DESC 
       LIMIT ${config.passwordHistory}
     `;
-    const results = await db.all(query);
+    const results = await allAsync(db, query);
 
     // Check if new password matches any of the last N passwords
     for (const row of results) {
@@ -169,7 +170,7 @@ export async function addPasswordToHistory(
       INSERT INTO PasswordHistory (user_id, password_hash, created_date)
       VALUES (${userId}, '${passwordHash}', CURRENT_TIMESTAMP)
     `;
-    await db.run(query);
+    await runAsync(db, query);
   } catch (error) {
     console.error("Error adding password to history:", error);
   }

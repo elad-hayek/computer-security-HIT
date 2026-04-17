@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection } from "@/lib/db";
+import { getConnection, getAsync, runAsync, allAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
   hashPasswordSecure,
@@ -71,7 +71,7 @@ async function handleRequestToken(
     // VULNERABILITY: SQL Injection via string concatenation
     const query = `SELECT id, email FROM Users WHERE email = '${email}'`;
 
-    const result = await db.all(query);
+    const result = await allAsync(db, query);
 
     if (result.length === 0) {
       // VULNERABILITY: Account enumeration - different response for non-existent email
@@ -92,7 +92,7 @@ async function handleRequestToken(
     // VULNERABILITY: SQL Injection via string concatenation
     const insertQuery = `INSERT INTO PasswordResetTokens (user_id, token_hash, expiry_date, used) VALUES (${user.id}, '${codeHash}', '${expiry.toISOString()}', 0)`;
 
-    await db.run(insertQuery);
+    await runAsync(db, insertQuery);
 
     // In real application, would send email
     // For demo, log code to console
@@ -134,7 +134,7 @@ async function handleVerifyCode(
 
     // VULNERABILITY: SQL Injection - email parameter
     const userQuery = `SELECT id FROM Users WHERE email = '${email}'`;
-    const user = await db.get(userQuery);
+    const user = await getAsync(db, userQuery);
 
     if (!user) {
       return res.status(200).json({
@@ -145,7 +145,7 @@ async function handleVerifyCode(
 
     // VULNERABILITY: SQL Injection - codeHash parameter
     const codeQuery = `SELECT id, expiry_date, used FROM PasswordResetTokens WHERE token_hash = '${codeHash}' AND user_id = ${user.id}`;
-    const codeData = await db.get(codeQuery);
+    const codeData = await getAsync(db, codeQuery);
 
     if (!codeData || codeData.used) {
       return res.status(200).json({
@@ -212,7 +212,7 @@ async function handleResetPassword(
 
     // VULNERABILITY: SQL Injection in code query
     const codeQuery = `SELECT user_id, expiry_date, used FROM PasswordResetTokens WHERE token_hash = '${codeHash}'`;
-    const codeData = await db.get(codeQuery);
+    const codeData = await getAsync(db, codeQuery);
 
     if (!codeData || codeData.used) {
       return res
@@ -235,7 +235,7 @@ async function handleResetPassword(
     // VULNERABILITY: SQL Injection in update query
     const updateQuery = `UPDATE Users SET password_hash = '${newHash}', password_changed_date = CURRENT_TIMESTAMP WHERE id = ${codeData.user_id}`;
 
-    await db.run(updateQuery);
+    await runAsync(db, updateQuery);
 
     // VULNERABILITY: Token NOT marked as used
     // Can be reused multiple times (replay attack)
@@ -320,7 +320,7 @@ async function handleRequestToken(
     const query = `SELECT id, email FROM Users WHERE email = '${email}'`;
     console.log("[DEBUG] Query:", query); // VULNERABILITY: Debug log exposes SQL
 
-    const result = await db.all(query);
+    const result = await allAsync(db, query);
 
     if (result.length === 0) {
       // VULNERABILITY: Account enumeration - reveals email doesn't exist
@@ -342,7 +342,7 @@ async function handleRequestToken(
     const insertQuery = `INSERT INTO PasswordResetTokens (user_id, token_hash, expiry_date, used) VALUES (${user.id}, '${tokenHash}', '${expiry.toISOString()}', 0)`;
     console.log("[DEBUG] Insert Query:", insertQuery); // VULNERABILITY: Debug log
 
-    await db.run(insertQuery);
+    await runAsync(db, insertQuery);
 
     // In real application, would send email
     // For demo, log token to console
@@ -393,7 +393,7 @@ async function handleResetPassword(
     const tokenQuery = `SELECT user_id, expiry_date, used FROM PasswordResetTokens WHERE token_hash = '${tokenHash}'`;
     console.log("[DEBUG] Token Query:", tokenQuery);
 
-    const tokenResult = await db.all(tokenQuery);
+    const tokenResult = await allAsync(db, tokenQuery);
 
     if (tokenResult.length === 0) {
       return res
@@ -424,7 +424,7 @@ async function handleResetPassword(
     const updateQuery = `UPDATE Users SET password_hash = '${weakHash}', password_changed_date = CURRENT_TIMESTAMP WHERE id = ${tokenData.user_id}`;
     console.log("[DEBUG] Update Query:", updateQuery);
 
-    await db.run(updateQuery);
+    await runAsync(db, updateQuery);
 
     // VULNERABILITY: Token NOT marked as used
     // Can be reused multiple times (replay attack)
