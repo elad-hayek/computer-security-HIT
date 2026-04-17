@@ -1,8 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection } from "@/lib/db";
-import { hashPasswordVulnerable, comparePasswordsVulnerable } from "@/lib/auth";
+import { getConnection, allAsync } from "@/lib/db";
+import { hashPasswordVulnerable } from "@/lib/auth";
 import { setAuthCookie } from "@/lib/cookies";
-import { getPasswordConfig } from "@/lib/passwordConfig";
 
 type ResponseData = {
   success: boolean;
@@ -58,9 +57,6 @@ export default async function handler(
     // Passwords are hashed, but the query is vulnerable to SQL injection
     const passwordHash = await hashPasswordVulnerable(password);
 
-    // Load config
-    const config = getPasswordConfig();
-
     // VULNERABLE: Build query with string concatenation - SQL INJECTION POSSIBLE
     // This allows SQL injection attacks!
     // Attack examples:
@@ -72,14 +68,13 @@ export default async function handler(
     const db = await getConnection();
 
     // VULNERABLE: Direct string query with concatenation
-    const result = await db.all(query);
+    const result = await allAsync(db, query);
 
     if (result.length === 0) {
       // Generic error message (same as secure version)
       // Note: Attackers can still use SQL injection to bypass this
       return res.status(401).json({
         success: false,
-        message: "Invalid credentials",
         message: "Invalid credentials",
       });
     }
@@ -102,8 +97,6 @@ export default async function handler(
     return res.status(500).json({
       success: false,
       message: "Login failed",
-    });
-  }
     });
   }
 }

@@ -2,12 +2,8 @@
   "compilerOptions": {
     "target": "es2020",
     "useDefineForClassFields": true,
-    "lib": [
-      "es2020",
-      "dom",
-      "dom.iterable"
-    ],
-    "paths":{
+    "lib": ["es2020", "dom", "dom.iterable"],
+    "paths": {
       "@/*": ["./*"]
     },
     "module": "esnext",
@@ -29,10 +25,6 @@
     "allowJs": true,
     "incremental": true
   },
-  "include": [
-    "src"
-  ],
-  "exclude": [
-    "node_modules"
-  ]
+  "include": ["pages", "lib", "scripts", "data"],
+  "exclude": ["node_modules"]
 }

@@ -132,6 +132,8 @@ export async function queryVulnerable(query: string): Promise<any> {
   }
 }
 
+export { getAsync, runAsync, allAsync };
+
 export default {
   getConnection,
   closeConnection,

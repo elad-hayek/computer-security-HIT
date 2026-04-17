@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import Cookies from "js-cookie";
 import type { PasswordConfig } from "@/lib/passwordConfig";
 
 export default function ChangePassword() {
@@ -21,6 +20,10 @@ export default function ChangePassword() {
     requireLowercase: true,
     requireDigits: true,
     requireSpecialChars: true,
+    passwordHistory: 3,
+    maxLoginAttempts: 3,
+    dictionaryCheckEnabled: true,
+    dictionaryFilePath: "wordlists/common-passwords.txt",
   });
   const [passwordValidation, setPasswordValidation] = useState({
     minLength: false,

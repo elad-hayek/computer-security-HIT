@@ -37,7 +37,7 @@ export default function Login() {
         // VULNERABLE: No localStorage needed with cookie-based auth
         // Auth cookie is automatically set by server and sent with requests
         // But still vulnerable to SQL injection attacks in backend
-        setSuccess(true);
+        setIsError(false);
         setMessage("Login successful! Redirecting to dashboard...");
 
         setTimeout(() => {
@@ -46,7 +46,7 @@ export default function Login() {
         }, 1500);
       } else {
         // Error message from backend (matches secure version now)
-        setSuccess(false);
+        setIsError(true);
         setMessage(data.message);
       }
     } catch (error: any) {
@@ -57,12 +57,13 @@ export default function Login() {
     }
   };
 
-
   return (
     <div style={styles.container}>
       <div style={styles.card}>
         <h1>Login - Communication_LTD</h1>
-        <p style={styles.vulnerable}>⚠ VULNERABLE VERSION - Educational Purpose</p>
+        <p style={styles.vulnerable}>
+          ⚠ VULNERABLE VERSION - Educational Purpose
+        </p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <input
@@ -115,7 +116,8 @@ export default function Login() {
 
         <p style={styles.note}>
           🔴 VULNERABLE: SQL injection in backend query. No rate limiting.
-          Session in localStorage (spoofable). No timing-safe password comparison.
+          Session in localStorage (spoofable). No timing-safe password
+          comparison.
         </p>
       </div>
     </div>

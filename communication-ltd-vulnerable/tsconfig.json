@@ -25,6 +25,6 @@
     "allowJs": true,
     "incremental": true
   },
-  "include": ["src"],
+  "include": ["pages", "lib", "scripts", "data"],
   "exclude": ["node_modules"]
 }
