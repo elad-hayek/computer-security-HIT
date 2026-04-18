@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection, getAsync } from "@/lib/db";
+import { getConnection, closeConnection, getAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
   hashPasswordSecure,
@@ -77,73 +77,77 @@ export default async function handler(
   }
 
   try {
-    const db = await getConnection();
+    try {
+      const db = await getConnection();
 
-    // SECURE: Parameterized query to fetch user
-    const userQuery = `SELECT id, password_hash FROM Users WHERE id = ?`;
-    const user = await getAsync(db, userQuery, [userId]);
+      // SECURE: Parameterized query to fetch user
+      const userQuery = `SELECT id, password_hash FROM Users WHERE id = ?`;
+      const user = await getAsync(db, userQuery, [userId]);
 
-    if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-    }
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
 
-    // SECURE: Verify old password before allowing change
-    // WHY: Ensures only the real user can change their own password
-    const oldPasswordMatch = await comparePasswordsSecure(
-      oldPassword,
-      user.password_hash,
-    );
+      // SECURE: Verify old password before allowing change
+      // WHY: Ensures only the real user can change their own password
+      const oldPasswordMatch = await comparePasswordsSecure(
+        oldPassword,
+        user.password_hash,
+      );
 
-    if (!oldPasswordMatch) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Old password is incorrect" });
-    }
+      if (!oldPasswordMatch) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Old password is incorrect" });
+      }
 
-    // SECURE: Check password history using new PasswordHistory table
-    // WHY: Prevents reusing same password multiple times
-    const historyCheck = await checkPasswordHistory(
-      userId,
-      newPassword,
-      db,
-      config,
-    );
+      // SECURE: Check password history using new PasswordHistory table
+      // WHY: Prevents reusing same password multiple times
+      const historyCheck = await checkPasswordHistory(
+        userId,
+        newPassword,
+        db,
+        config,
+      );
 
-    if (!historyCheck.valid) {
-      return res.status(400).json({
+      if (!historyCheck.valid) {
+        return res.status(400).json({
+          success: false,
+          message: historyCheck.reason || "Password validation failed",
+        });
+      }
+
+      // SECURE: Hash new password
+      const newHash = await hashPasswordSecure(newPassword);
+
+      // SECURE: Parameterized update query
+      const updateQuery = `
+        UPDATE Users 
+        SET password_hash = ?, 
+            password_changed_date = CURRENT_TIMESTAMP 
+        WHERE id = ?
+      `;
+
+      await db.run(updateQuery, [newHash, userId]);
+
+      // SECURE: Add new password to history
+      await addPasswordToHistory(userId, newHash, db);
+
+      return res.status(200).json({
+        success: true,
+        message: "Password changed successfully",
+      });
+    } catch (error: any) {
+      console.error("Change password error:", error);
+
+      return res.status(500).json({
         success: false,
-        message: historyCheck.reason || "Password validation failed",
+        message: "Failed to change password",
       });
     }
-
-    // SECURE: Hash new password
-    const newHash = await hashPasswordSecure(newPassword);
-
-    // SECURE: Parameterized update query
-    const updateQuery = `
-      UPDATE Users 
-      SET password_hash = ?, 
-          password_changed_date = CURRENT_TIMESTAMP 
-      WHERE id = ?
-    `;
-
-    await db.run(updateQuery, [newHash, userId]);
-
-    // SECURE: Add new password to history
-    await addPasswordToHistory(userId, newHash, db);
-
-    return res.status(200).json({
-      success: true,
-      message: "Password changed successfully",
-    });
-  } catch (error: any) {
-    console.error("Change password error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to change password",
-    });
+  } finally {
+    await closeConnection();
   }
 }

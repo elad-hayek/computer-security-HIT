@@ -1,5 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection, getAsync, runAsync, allAsync } from "@/lib/db";
+import {
+  getConnection,
+  closeConnection,
+  getAsync,
+  runAsync,
+  allAsync,
+} from "@/lib/db";
 import {
   validatePasswordPolicy,
   hashPasswordSecure,
@@ -66,51 +72,55 @@ async function handleRequestToken(
   }
 
   try {
-    const db = await getConnection();
+    try {
+      const db = await getConnection();
 
-    // VULNERABILITY: SQL Injection via string concatenation
-    const query = `SELECT id, email FROM Users WHERE email = '${email}'`;
+      // VULNERABILITY: SQL Injection via string concatenation
+      const query = `SELECT id, email FROM Users WHERE email = '${email}'`;
 
-    const result = await allAsync(db, query);
+      const result = await allAsync(db, query);
 
-    if (result.length === 0) {
-      // VULNERABILITY: Account enumeration - different response for non-existent email
-      return res
-        .status(404)
-        .json({ success: false, message: "Email not found" });
+      if (result.length === 0) {
+        // VULNERABILITY: Account enumeration - different response for non-existent email
+        return res
+          .status(404)
+          .json({ success: false, message: "Email not found" });
+      }
+
+      const user = result[0];
+
+      // Generate code
+      const code = crypto.randomBytes(16).toString("hex");
+      const codeHash = crypto.createHash("sha1").update(code).digest("hex");
+
+      // Set expiry to 1 hour from now
+      const expiry = new Date(Date.now() + 60 * 60 * 1000);
+
+      // VULNERABILITY: SQL Injection via string concatenation
+      const insertQuery = `INSERT INTO PasswordResetTokens (user_id, token_hash, expiry_date, used) VALUES (${user.id}, '${codeHash}', '${expiry.toISOString()}', 0)`;
+
+      await runAsync(db, insertQuery);
+
+      // In real application, would send email
+      // For demo, log code to console
+      console.log(`[VULNERABLE DEMO] Reset code for ${email}: ${code}`);
+
+      return res.status(200).json({
+        success: true,
+        message:
+          "If an account exists with this email, a reset link will be sent",
+      });
+    } catch (error: any) {
+      console.error("Request token error:", error);
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "If an account exists with this email, a reset link will be sent",
+      });
     }
-
-    const user = result[0];
-
-    // Generate code
-    const code = crypto.randomBytes(16).toString("hex");
-    const codeHash = crypto.createHash("sha1").update(code).digest("hex");
-
-    // Set expiry to 1 hour from now
-    const expiry = new Date(Date.now() + 60 * 60 * 1000);
-
-    // VULNERABILITY: SQL Injection via string concatenation
-    const insertQuery = `INSERT INTO PasswordResetTokens (user_id, token_hash, expiry_date, used) VALUES (${user.id}, '${codeHash}', '${expiry.toISOString()}', 0)`;
-
-    await runAsync(db, insertQuery);
-
-    // In real application, would send email
-    // For demo, log code to console
-    console.log(`[VULNERABLE DEMO] Reset code for ${email}: ${code}`);
-
-    return res.status(200).json({
-      success: true,
-      message:
-        "If an account exists with this email, a reset link will be sent",
-    });
-  } catch (error: any) {
-    console.error("Request token error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "If an account exists with this email, a reset link will be sent",
-    });
+  } finally {
+    await closeConnection();
   }
 }
 
@@ -127,51 +137,55 @@ async function handleVerifyCode(
   }
 
   try {
-    // VULNERABILITY: Code hash without proper validation
-    const codeHash = crypto.createHash("sha1").update(code).digest("hex");
+    try {
+      // VULNERABILITY: Code hash without proper validation
+      const codeHash = crypto.createHash("sha1").update(code).digest("hex");
 
-    const db = await getConnection();
+      const db = await getConnection();
 
-    // VULNERABILITY: SQL Injection - email parameter
-    const userQuery = `SELECT id FROM Users WHERE email = '${email}'`;
-    const user = await getAsync(db, userQuery);
+      // VULNERABILITY: SQL Injection - email parameter
+      const userQuery = `SELECT id FROM Users WHERE email = '${email}'`;
+      const user = await getAsync(db, userQuery);
 
-    if (!user) {
+      if (!user) {
+        return res.status(200).json({
+          success: false,
+          message: "Invalid code or email combination",
+        });
+      }
+
+      // VULNERABILITY: SQL Injection - codeHash parameter
+      const codeQuery = `SELECT id, expiry_date, used FROM PasswordResetTokens WHERE token_hash = '${codeHash}' AND user_id = ${user.id}`;
+      const codeData = await getAsync(db, codeQuery);
+
+      if (!codeData || codeData.used) {
+        return res.status(200).json({
+          success: false,
+          message: "Invalid or expired code",
+        });
+      }
+
+      if (new Date(codeData.expiry_date) < new Date()) {
+        return res.status(200).json({
+          success: false,
+          message: "Code has expired",
+        });
+      }
+
       return res.status(200).json({
+        success: true,
+        message: "Code verified successfully",
+      });
+    } catch (error: any) {
+      console.error("Verify code error:", error);
+
+      return res.status(500).json({
         success: false,
-        message: "Invalid code or email combination",
+        message: "Failed to verify code",
       });
     }
-
-    // VULNERABILITY: SQL Injection - codeHash parameter
-    const codeQuery = `SELECT id, expiry_date, used FROM PasswordResetTokens WHERE token_hash = '${codeHash}' AND user_id = ${user.id}`;
-    const codeData = await getAsync(db, codeQuery);
-
-    if (!codeData || codeData.used) {
-      return res.status(200).json({
-        success: false,
-        message: "Invalid or expired code",
-      });
-    }
-
-    if (new Date(codeData.expiry_date) < new Date()) {
-      return res.status(200).json({
-        success: false,
-        message: "Code has expired",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Code verified successfully",
-    });
-  } catch (error: any) {
-    console.error("Verify code error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to verify code",
-    });
+  } finally {
+    await closeConnection();
   }
 }
 
@@ -205,51 +219,55 @@ async function handleResetPassword(
   }
 
   try {
-    // VULNERABILITY: Code hash without proper validation
-    const codeHash = crypto.createHash("sha1").update(code).digest("hex");
+    try {
+      // VULNERABILITY: Code hash without proper validation
+      const codeHash = crypto.createHash("sha1").update(code).digest("hex");
 
-    const db = await getConnection();
+      const db = await getConnection();
 
-    // VULNERABILITY: SQL Injection in code query
-    const codeQuery = `SELECT user_id, expiry_date, used FROM PasswordResetTokens WHERE token_hash = '${codeHash}'`;
-    const codeData = await getAsync(db, codeQuery);
+      // VULNERABILITY: SQL Injection in code query
+      const codeQuery = `SELECT user_id, expiry_date, used FROM PasswordResetTokens WHERE token_hash = '${codeHash}'`;
+      const codeData = await getAsync(db, codeQuery);
 
-    if (!codeData || codeData.used) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid or expired code" });
+      if (!codeData || codeData.used) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid or expired code" });
+      }
+
+      if (new Date(codeData.expiry_date) < new Date()) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Code has expired" });
+      }
+
+      // VULNERABILITY: No password history check
+      // Users can reuse old passwords
+
+      // VULNERABILITY: Weak password hashing (plain text or weak hash)
+      const newHash = await hashPasswordSecure(newPassword);
+
+      // VULNERABILITY: SQL Injection in update query
+      const updateQuery = `UPDATE Users SET password_hash = '${newHash}', password_changed_date = CURRENT_TIMESTAMP WHERE id = ${codeData.user_id}`;
+
+      await runAsync(db, updateQuery);
+
+      // VULNERABILITY: Token NOT marked as used
+      // Can be reused multiple times (replay attack)
+
+      return res.status(200).json({
+        success: true,
+        message: "Password reset successfully! Redirecting to login...",
+      });
+    } catch (error: any) {
+      console.error("Reset password error:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Failed to reset password",
+      });
     }
-
-    if (new Date(codeData.expiry_date) < new Date()) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Code has expired" });
-    }
-
-    // VULNERABILITY: No password history check
-    // Users can reuse old passwords
-
-    // VULNERABILITY: Weak password hashing (plain text or weak hash)
-    const newHash = await hashPasswordSecure(newPassword);
-
-    // VULNERABILITY: SQL Injection in update query
-    const updateQuery = `UPDATE Users SET password_hash = '${newHash}', password_changed_date = CURRENT_TIMESTAMP WHERE id = ${codeData.user_id}`;
-
-    await runAsync(db, updateQuery);
-
-    // VULNERABILITY: Token NOT marked as used
-    // Can be reused multiple times (replay attack)
-
-    return res.status(200).json({
-      success: true,
-      message: "Password reset successfully! Redirecting to login...",
-    });
-  } catch (error: any) {
-    console.error("Reset password error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to reset password",
-    });
+  } finally {
+    await closeConnection();
   }
 }

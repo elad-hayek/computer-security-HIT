@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection, getAsync, runAsync } from "@/lib/db";
+import { getConnection, closeConnection, getAsync, runAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
   hashPasswordSecure,
@@ -68,59 +68,67 @@ async function handleRequestToken(
   }
 
   try {
-    const db = await getConnection();
+    try {
+      const db = await getConnection();
 
-    // SECURE: Parameterized query
-    const userQuery = `SELECT id, email, username FROM Users WHERE email = ?`;
-    const user = await getAsync(db, userQuery, [email]);
+      // SECURE: Parameterized query
+      const userQuery = `SELECT id, email, username FROM Users WHERE email = ?`;
+      const user = await getAsync(db, userQuery, [email]);
 
-    // SECURE: Generic response (doesn't leak whether email exists)
-    if (!user) {
+      // SECURE: Generic response (doesn't leak whether email exists)
+      if (!user) {
+        return res.status(200).json({
+          success: true,
+          message:
+            "If an account exists with this email, a reset link will be sent",
+        });
+      }
+
+      // TODO: explain this code
+      // SECURE: Generate cryptographically secure token
+      const token = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto.createHash("sha1").update(token).digest("hex");
+
+      // TODO: decrease token expiry time in real application (e.g. 15 minutes)
+      // Set expiry to 1 hour from now
+      const expiry = new Date(Date.now() + 60 * 60 * 1000);
+
+      // SECURE: Parameterized insert query
+      const insertQuery = `INSERT INTO PasswordResetTokens (user_id, token_hash, expiry_date, used) 
+                           VALUES (?, ?, ?, 0)`;
+
+      await runAsync(db, insertQuery, [
+        user.id,
+        tokenHash,
+        expiry.toISOString(),
+      ]);
+
+      // TODO: Implement email sending logic here
+      // In real application, would send email with reset link
+      // Email would contain: visit ${process.env.NEXT_PUBLIC_APP_URL}/forgot-password?token=${token}
+      // For demo purposes, log to console
+      console.log(
+        `[SECURE] Reset token sent to ${email}. Token: ${token} (valid for 1 hour)`,
+      );
+
+      // SECURE: Generic message doesn't reveal whether email existed
       return res.status(200).json({
         success: true,
+        message:
+          "If an account exists with this email, a reset link will be sent. Check console for token (demo only)",
+      });
+    } catch (error: any) {
+      console.error("Request token error:", error);
+
+      // SECURE: Generic error message
+      return res.status(500).json({
+        success: true, // Still return success to avoid email enumeration
         message:
           "If an account exists with this email, a reset link will be sent",
       });
     }
-
-    // TODO: explain this code
-    // SECURE: Generate cryptographically secure token
-    const token = crypto.randomBytes(32).toString("hex");
-    const tokenHash = crypto.createHash("sha1").update(token).digest("hex");
-
-    // TODO: decrease token expiry time in real application (e.g. 15 minutes)
-    // Set expiry to 1 hour from now
-    const expiry = new Date(Date.now() + 60 * 60 * 1000);
-
-    // SECURE: Parameterized insert query
-    const insertQuery = `INSERT INTO PasswordResetTokens (user_id, token_hash, expiry_date, used) 
-                         VALUES (?, ?, ?, 0)`;
-
-    await runAsync(db, insertQuery, [user.id, tokenHash, expiry.toISOString()]);
-
-    // TODO: Implement email sending logic here
-    // In real application, would send email with reset link
-    // Email would contain: visit ${process.env.NEXT_PUBLIC_APP_URL}/forgot-password?token=${token}
-    // For demo purposes, log to console
-    console.log(
-      `[SECURE] Reset token sent to ${email}. Token: ${token} (valid for 1 hour)`,
-    );
-
-    // SECURE: Generic message doesn't reveal whether email existed
-    return res.status(200).json({
-      success: true,
-      message:
-        "If an account exists with this email, a reset link will be sent. Check console for token (demo only)",
-    });
-  } catch (error: any) {
-    console.error("Request token error:", error);
-
-    // SECURE: Generic error message
-    return res.status(500).json({
-      success: true, // Still return success to avoid email enumeration
-      message:
-        "If an account exists with this email, a reset link will be sent",
-    });
+  } finally {
+    await closeConnection();
   }
 }
 
@@ -137,55 +145,59 @@ async function handleVerifyCode(
   }
 
   try {
-    // TODO: explain this code
-    // SECURE: Hash code to find it
-    const codeHash = crypto.createHash("sha1").update(code).digest("hex");
+    try {
+      // TODO: explain this code
+      // SECURE: Hash code to find it
+      const codeHash = crypto.createHash("sha1").update(code).digest("hex");
 
-    const db = await getConnection();
+      const db = await getConnection();
 
-    // SECURE: Get user by email
-    const userQuery = `SELECT id FROM Users WHERE email = ?`;
-    const user = await getAsync(db, userQuery, [email]);
+      // SECURE: Get user by email
+      const userQuery = `SELECT id FROM Users WHERE email = ?`;
+      const user = await getAsync(db, userQuery, [email]);
 
-    if (!user) {
-      // SECURE: Generic response (doesn't leak whether email exists)
+      if (!user) {
+        // SECURE: Generic response (doesn't leak whether email exists)
+        return res.status(200).json({
+          success: false,
+          message: "Invalid code or email combination",
+        });
+      }
+
+      // SECURE: Parameterized query to find code
+      const codeQuery = `SELECT id, expiry_date, used FROM PasswordResetTokens 
+                         WHERE token_hash = ? AND user_id = ?`;
+      const codeData = await getAsync(db, codeQuery, [codeHash, user.id]);
+
+      if (!codeData || codeData.used) {
+        return res.status(200).json({
+          success: false,
+          message: "Invalid or expired code",
+        });
+      }
+
+      if (new Date(codeData.expiry_date) < new Date()) {
+        return res.status(200).json({
+          success: false,
+          message: "Code has expired",
+        });
+      }
+
+      // Code is valid
       return res.status(200).json({
+        success: true,
+        message: "Code verified successfully",
+      });
+    } catch (error: any) {
+      console.error("Verify code error:", error);
+
+      return res.status(500).json({
         success: false,
-        message: "Invalid code or email combination",
+        message: "Failed to verify code",
       });
     }
-
-    // SECURE: Parameterized query to find code
-    const codeQuery = `SELECT id, expiry_date, used FROM PasswordResetTokens 
-                       WHERE token_hash = ? AND user_id = ?`;
-    const codeData = await getAsync(db, codeQuery, [codeHash, user.id]);
-
-    if (!codeData || codeData.used) {
-      return res.status(200).json({
-        success: false,
-        message: "Invalid or expired code",
-      });
-    }
-
-    if (new Date(codeData.expiry_date) < new Date()) {
-      return res.status(200).json({
-        success: false,
-        message: "Code has expired",
-      });
-    }
-
-    // Code is valid
-    return res.status(200).json({
-      success: true,
-      message: "Code verified successfully",
-    });
-  } catch (error: any) {
-    console.error("Verify code error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to verify code",
-    });
+  } finally {
+    await closeConnection();
   }
 }
 
@@ -219,72 +231,76 @@ async function handleResetPassword(
   }
 
   try {
-    // SECURE: Hash code to find it (don't store plain codes)
-    const codeHash = crypto.createHash("sha1").update(code).digest("hex");
+    try {
+      // SECURE: Hash code to find it (don't store plain codes)
+      const codeHash = crypto.createHash("sha1").update(code).digest("hex");
 
-    const db = await getConnection();
+      const db = await getConnection();
 
-    // SECURE: Parameterized query to find code
-    const codeQuery = `SELECT user_id, expiry_date, used FROM PasswordResetTokens 
-                        WHERE token_hash = ?`;
-    const codeData = await getAsync(db, codeQuery, [codeHash]);
+      // SECURE: Parameterized query to find code
+      const codeQuery = `SELECT user_id, expiry_date, used FROM PasswordResetTokens 
+                          WHERE token_hash = ?`;
+      const codeData = await getAsync(db, codeQuery, [codeHash]);
 
-    if (!codeData || codeData.used) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid or expired code" });
-    }
+      if (!codeData || codeData.used) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid or expired code" });
+      }
 
-    if (new Date(codeData.expiry_date) < new Date()) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Code has expired" });
-    }
+      if (new Date(codeData.expiry_date) < new Date()) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Code has expired" });
+      }
 
-    // SECURE: Check password history - prevent reuse
-    const historyCheck = await checkPasswordHistory(
-      codeData.user_id,
-      newPassword,
-      db,
-      config,
-    );
+      // SECURE: Check password history - prevent reuse
+      const historyCheck = await checkPasswordHistory(
+        codeData.user_id,
+        newPassword,
+        db,
+        config,
+      );
 
-    if (!historyCheck.valid) {
-      return res.status(400).json({
+      if (!historyCheck.valid) {
+        return res.status(400).json({
+          success: false,
+          message: historyCheck.reason || "Password validation failed",
+        });
+      }
+
+      // SECURE: Hash new password with bcryptjs
+      const newHash = await hashPasswordSecure(newPassword);
+
+      // SECURE: Parameterized update query
+      const updateQuery = `
+        UPDATE Users 
+        SET password_hash = ?, password_changed_date = CURRENT_TIMESTAMP 
+        WHERE id = ?
+      `;
+
+      await runAsync(db, updateQuery, [newHash, codeData.user_id]);
+
+      // SECURE: Add new password to history
+      await addPasswordToHistory(codeData.user_id, newHash, db);
+
+      // SECURE: Mark code as used to prevent reuse
+      const markUsedQuery = `UPDATE PasswordResetTokens SET used = 1 WHERE token_hash = ?`;
+      await runAsync(db, markUsedQuery, [codeHash]);
+
+      return res.status(200).json({
+        success: true,
+        message: "Password reset successfully",
+      });
+    } catch (error: any) {
+      console.error("Reset password error:", error);
+
+      return res.status(500).json({
         success: false,
-        message: historyCheck.reason || "Password validation failed",
+        message: "Failed to reset password",
       });
     }
-
-    // SECURE: Hash new password with bcryptjs
-    const newHash = await hashPasswordSecure(newPassword);
-
-    // SECURE: Parameterized update query
-    const updateQuery = `
-      UPDATE Users 
-      SET password_hash = ?, password_changed_date = CURRENT_TIMESTAMP 
-      WHERE id = ?
-    `;
-
-    await runAsync(db, updateQuery, [newHash, codeData.user_id]);
-
-    // SECURE: Add new password to history
-    await addPasswordToHistory(codeData.user_id, newHash, db);
-
-    // SECURE: Mark code as used to prevent reuse
-    const markUsedQuery = `UPDATE PasswordResetTokens SET used = 1 WHERE token_hash = ?`;
-    await runAsync(db, markUsedQuery, [codeHash]);
-
-    return res.status(200).json({
-      success: true,
-      message: "Password reset successfully",
-    });
-  } catch (error: any) {
-    console.error("Reset password error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to reset password",
-    });
+  } finally {
+    await closeConnection();
   }
 }

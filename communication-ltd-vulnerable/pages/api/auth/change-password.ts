@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection, getAsync, runAsync } from "@/lib/db";
+import { getConnection, closeConnection, getAsync, runAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
   hashPasswordSecure,
@@ -65,85 +65,89 @@ export default async function handler(
   }
 
   try {
-    const db = await getConnection();
+    try {
+      const db = await getConnection();
 
-    // VULNERABLE: SQL injection via string concatenation
-    // Even though userId is numeric from cookie, the pattern demonstrates vulnerability
-    const userQuery = `SELECT id, password_hash FROM Users WHERE id = ${userId}`;
+      // VULNERABLE: SQL injection via string concatenation
+      // Even though userId is numeric from cookie, the pattern demonstrates vulnerability
+      const userQuery = `SELECT id, password_hash FROM Users WHERE id = ${userId}`;
 
-    const userResult = await getAsync(db, userQuery);
+      const userResult = await getAsync(db, userQuery);
 
-    if (!userResult) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-    }
+      if (!userResult) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
 
-    // VULNERABLE: Verify old password using bcryptjs (same as secure version for consistency)
-    // This ensures only the real user can change their password
-    const oldPasswordMatch = await comparePasswordsSecure(
-      oldPassword,
-      userResult.password_hash,
-    );
+      // VULNERABLE: Verify old password using bcryptjs (same as secure version for consistency)
+      // This ensures only the real user can change their password
+      const oldPasswordMatch = await comparePasswordsSecure(
+        oldPassword,
+        userResult.password_hash,
+      );
 
-    if (!oldPasswordMatch) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Old password is incorrect" });
-    }
+      if (!oldPasswordMatch) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Old password is incorrect" });
+      }
 
-    // Get password policy from config
-    const config = getPasswordConfig();
+      // Get password policy from config
+      const config = getPasswordConfig();
 
-    // Validate new password against policy
-    const validation = validatePasswordPolicy(newPassword, config);
-    if (!validation.valid) {
-      return res.status(400).json({
+      // Validate new password against policy
+      const validation = validatePasswordPolicy(newPassword, config);
+      if (!validation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: "New password does not meet requirements",
+          errors: validation.errors,
+        });
+      }
+
+      // VULNERABLE: Check password history with SQL injection
+      const historyCheck = await checkPasswordHistory(
+        userId,
+        newPassword,
+        db,
+        config,
+      );
+
+      if (!historyCheck.valid) {
+        return res.status(400).json({
+          success: false,
+          message: historyCheck.reason || "Password validation failed",
+        });
+      }
+
+      // VULNERABLE: Hash password using bcryptjs (same as secure)
+      const newHash = await hashPasswordSecure(newPassword);
+
+      // VULNERABLE: SQL injection via string concatenation in UPDATE query
+      // Attack: If newHash contained quotes, it could break SQL syntax
+      // Example: newHash = "test'; DROP TABLE Users; --"
+      const updateQuery = `UPDATE Users SET password_hash = '${newHash}', password_changed_date = CURRENT_TIMESTAMP WHERE id = ${userId}`;
+
+      await runAsync(db, updateQuery);
+
+      // VULNERABLE: Add password to history with SQL injection
+      await addPasswordToHistory(userId, newHash, db);
+
+      return res.status(200).json({
+        success: true,
+        message: "Password changed successfully",
+      });
+    } catch (error: any) {
+      console.error("Change password error:", error);
+
+      // Generic error message (same as secure version)
+      return res.status(500).json({
         success: false,
-        message: "New password does not meet requirements",
-        errors: validation.errors,
+        message: "Failed to change password",
       });
     }
-
-    // VULNERABLE: Check password history with SQL injection
-    const historyCheck = await checkPasswordHistory(
-      userId,
-      newPassword,
-      db,
-      config,
-    );
-
-    if (!historyCheck.valid) {
-      return res.status(400).json({
-        success: false,
-        message: historyCheck.reason || "Password validation failed",
-      });
-    }
-
-    // VULNERABLE: Hash password using bcryptjs (same as secure)
-    const newHash = await hashPasswordSecure(newPassword);
-
-    // VULNERABLE: SQL injection via string concatenation in UPDATE query
-    // Attack: If newHash contained quotes, it could break SQL syntax
-    // Example: newHash = "test'; DROP TABLE Users; --"
-    const updateQuery = `UPDATE Users SET password_hash = '${newHash}', password_changed_date = CURRENT_TIMESTAMP WHERE id = ${userId}`;
-
-    await runAsync(db, updateQuery);
-
-    // VULNERABLE: Add password to history with SQL injection
-    await addPasswordToHistory(userId, newHash, db);
-
-    return res.status(200).json({
-      success: true,
-      message: "Password changed successfully",
-    });
-  } catch (error: any) {
-    console.error("Change password error:", error);
-
-    // Generic error message (same as secure version)
-    return res.status(500).json({
-      success: false,
-      message: "Failed to change password",
-    });
+  } finally {
+    await closeConnection();
   }
 }

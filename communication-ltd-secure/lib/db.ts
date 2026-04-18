@@ -76,5 +76,25 @@ export async function getConnection(): Promise<sqlite3.Database> {
   return db;
 }
 
+/**
+ * Close database connection (for cleanup)
+ */
+export async function closeConnection(): Promise<void> {
+  if (db) {
+    await new Promise<void>((resolve, reject) => {
+      db!.close((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    db = null;
+  }
+}
+
 // Export async wrapper functions for direct database operations
 export { getAsync, runAsync, allAsync };
+
+export default {
+  getConnection,
+  closeConnection,
+};

@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection, runAsync, getAsync } from "@/lib/db";
+import { getConnection, closeConnection, runAsync, getAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
   hashPasswordSecure,
@@ -83,57 +83,64 @@ export default async function handler(
   }
 
   try {
-    // VULNERABLE: Hash password using bcryptjs (same as secure)
-    // The vulnerability is in the SQL queries, not password hashing
-    const passwordHash = await hashPasswordSecure(password);
+    try {
+      // VULNERABLE: Hash password using bcryptjs (same as secure)
+      // The vulnerability is in the SQL queries, not password hashing
+      const passwordHash = await hashPasswordSecure(password);
 
-    // VULNERABLE: Build query with string concatenation - SQL INJECTION POSSIBLE
-    // This allows SQL injection attacks!
-    // Attack examples:
-    //   username = "admin'); DROP TABLE Users; --"
-    //   username = "' OR '1'='1'); INSERT INTO Users... --"
-    // Also XSS via firstName:
-    //   firstName = "<img src=x onerror='alert(1)'>"
-    const query = `INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, created_date) VALUES ('${username}', '${email}', '${firstName || ""}', '${lastName || ""}', '${phone || ""}', '${passwordHash}', CURRENT_TIMESTAMP)`;
+      // VULNERABLE: Build query with string concatenation - SQL INJECTION POSSIBLE
+      // This allows SQL injection attacks!
+      // Attack examples:
+      //   username = "admin'); DROP TABLE Users; --"
+      //   username = "' OR '1'='1'); INSERT INTO Users... --"
+      // Also XSS via firstName:
+      //   firstName = "<img src=x onerror='alert(1)'>"
+      const query = `INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, created_date) VALUES ('${username}', '${email}', '${firstName || ""}', '${lastName || ""}', '${phone || ""}', '${passwordHash}', CURRENT_TIMESTAMP)`;
 
-    const db = await getConnection();
+      const db = await getConnection();
 
-    // VULNERABLE: Direct string execution
-    await runAsync(db, query);
+      // VULNERABLE: Direct string execution
+      await runAsync(db, query);
 
-    // Get the newly created user's ID (with SQL injection vulnerability)
-    const userQuery = `SELECT id FROM Users WHERE username = '${username}'`; // VULNERABLE!
-    const user = await getAsync(db, userQuery);
+      // Get the newly created user's ID (with SQL injection vulnerability)
+      const userQuery = `SELECT id FROM Users WHERE username = '${username}'`; // VULNERABLE!
+      const user = await getAsync(db, userQuery);
 
-    if (user) {
-      // VULNERABLE: Password history with SQL injection
-      await addPasswordToHistory(user.id, passwordHash, db);
+      if (user) {
+        // VULNERABLE: Password history with SQL injection
+        await addPasswordToHistory(user.id, passwordHash, db);
 
-      // VULNERABLE: Set HTTP-only cookie (same as secure)
-      setAuthCookie(res, user.id);
+        // VULNERABLE: Set HTTP-only cookie (same as secure)
+        setAuthCookie(res, user.id);
+      }
+
+      return res.status(201).json({
+        success: true,
+        message: `User '${username}' registered successfully`,
+      });
+    } catch (error: any) {
+      console.error("Registration error:", error);
+
+      // Check if it's a duplicate username/email error
+      if (
+        error.message.includes("UNIQUE") ||
+        error.message.includes("duplicate")
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: "Username or email already exists",
+          });
+      }
+
+      // Generic error message (same as secure version)
+      return res.status(500).json({
+        success: false,
+        message: "Registration failed",
+      });
     }
-
-    return res.status(201).json({
-      success: true,
-      message: `User '${username}' registered successfully`,
-    });
-  } catch (error: any) {
-    console.error("Registration error:", error);
-
-    // Check if it's a duplicate username/email error
-    if (
-      error.message.includes("UNIQUE") ||
-      error.message.includes("duplicate")
-    ) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Username or email already exists" });
-    }
-
-    // Generic error message (same as secure version)
-    return res.status(500).json({
-      success: false,
-      message: "Registration failed",
-    });
+  } finally {
+    await closeConnection();
   }
 }

@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection, getAsync, runAsync } from "@/lib/db";
+import { getConnection, closeConnection, getAsync, runAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
   hashPasswordSecure,
@@ -91,58 +91,65 @@ export default async function handler(
   }
 
   try {
-    const db = await getConnection();
+    try {
+      const db = await getConnection();
 
-    // SECURE: Hash password with bcryptjs
-    const passwordHash = await hashPasswordSecure(password);
+      // SECURE: Hash password with bcryptjs
+      const passwordHash = await hashPasswordSecure(password);
 
-    // SECURE: Use parameterized query with new fields
-    const query = `
-      INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, created_date) 
-      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `;
+      // SECURE: Use parameterized query with new fields
+      const query = `
+        INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, created_date) 
+        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `;
 
-    await runAsync(db, query, [
-      username,
-      email,
-      firstName || null,
-      lastName || null,
-      phone || null,
-      passwordHash,
-    ]);
+      await runAsync(db, query, [
+        username,
+        email,
+        firstName || null,
+        lastName || null,
+        phone || null,
+        passwordHash,
+      ]);
 
-    // Get the newly created user's ID to add to password history
-    const userQuery = `SELECT id FROM Users WHERE username = ?`;
-    const user = await getAsync(db, userQuery, [username]);
+      // Get the newly created user's ID to add to password history
+      const userQuery = `SELECT id FROM Users WHERE username = ?`;
+      const user = await getAsync(db, userQuery, [username]);
 
-    if (user) {
-      // Add initial password to history
-      await addPasswordToHistory(user.id, passwordHash, db);
+      if (user) {
+        // Add initial password to history
+        await addPasswordToHistory(user.id, passwordHash, db);
 
-      // SECURE: Set HTTP-only cookie for authentication
-      setAuthCookie(res, user.id);
+        // SECURE: Set HTTP-only cookie for authentication
+        setAuthCookie(res, user.id);
+      }
+
+      return res.status(201).json({
+        success: true,
+        message: `User '${username}' registered successfully`,
+      });
+    } catch (error: any) {
+      console.error("Registration error:", error);
+
+      // Check if it's a duplicate username/email error
+      if (
+        error.message.includes("UNIQUE") ||
+        error.message.includes("duplicate")
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: "Username or email already exists",
+          });
+      }
+
+      return res.status(500).json({
+        success: false,
+        message: "Registration failed",
+      });
     }
-
-    return res.status(201).json({
-      success: true,
-      message: `User '${username}' registered successfully`,
-    });
-  } catch (error: any) {
-    console.error("Registration error:", error);
-
-    // Check if it's a duplicate username/email error
-    if (
-      error.message.includes("UNIQUE") ||
-      error.message.includes("duplicate")
-    ) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Username or email already exists" });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message: "Registration failed",
-    });
+  } finally {
+    await closeConnection();
   }
 }

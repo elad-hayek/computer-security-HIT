@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection, allAsync } from "@/lib/db";
+import { getConnection, closeConnection, allAsync } from "@/lib/db";
 import { comparePasswordsSecure } from "@/lib/auth";
 import { setAuthCookie } from "@/lib/cookies";
 
@@ -53,58 +53,65 @@ export default async function handler(
   }
 
   try {
-    // VULNERABLE: Hash password using bcryptjs (same as secure)
-    // Passwords are hashed, but the query is vulnerable to SQL injection
-    const db = await getConnection();
+    try {
+      // VULNERABLE: Hash password using bcryptjs (same as secure)
+      // Passwords are hashed, but the query is vulnerable to SQL injection
+      const db = await getConnection();
 
-    // VULNERABLE: Build query with string concatenation - SQL INJECTION POSSIBLE
-    // This allows SQL injection attacks!
-    // Attack examples:
-    //   username = "admin' --" bypasses password check
-    //   username = "' OR '1'='1' --" returns first user (often admin)
-    const query = `SELECT * FROM Users WHERE username = '${username}'`;
+      // VULNERABLE: Build query with string concatenation - SQL INJECTION POSSIBLE
+      // This allows SQL injection attacks!
+      // Attack examples:
+      //   username = "admin' --" bypasses password check
+      //   username = "' OR '1'='1' --" returns first user (often admin)
+      const query = `SELECT * FROM Users WHERE username = '${username}'`;
 
-    // VULNERABLE: Direct string query with concatenation
-    const result = await allAsync(db, query);
+      // VULNERABLE: Direct string query with concatenation
+      const result = await allAsync(db, query);
 
-    if (result.length === 0) {
+      if (result.length === 0) {
+        // Generic error message (same as secure version)
+        // Note: Attackers can still use SQL injection to bypass this
+        return res.status(401).json({
+          success: false,
+          message: "Invalid credentials",
+        });
+      }
+
+      const user = result[0];
+
+      // FIXED: Now using proper bcryptjs comparison instead of hashing in the query
+      // This prevents the logic bug that made login impossible
+      const passwordMatch = await comparePasswordsSecure(
+        password,
+        user.password_hash,
+      );
+
+      if (!passwordMatch) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid credentials",
+        });
+      }
+
+      // VULNERABLE: Set HTTP-only cookie (same mechanism as secure)
+      // The vulnerability is in the query, not the cookie handling
+      setAuthCookie(res, user.id);
+
+      return res.status(200).json({
+        success: true,
+        message: "Login successful",
+      });
+    } catch (error: any) {
+      console.error("Login error:", error);
+
       // Generic error message (same as secure version)
-      // Note: Attackers can still use SQL injection to bypass this
-      return res.status(401).json({
+      // Don't reveal database details
+      return res.status(500).json({
         success: false,
-        message: "Invalid credentials",
+        message: "Login failed",
       });
     }
-
-    const user = result[0];
-
-    // FIXED: Now using proper bcryptjs comparison instead of hashing in the query
-    // This prevents the logic bug that made login impossible
-    const passwordMatch = await comparePasswordsSecure(password, user.password_hash);
-
-    if (!passwordMatch) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid credentials",
-      });
-    }
-
-    // VULNERABLE: Set HTTP-only cookie (same mechanism as secure)
-    // The vulnerability is in the query, not the cookie handling
-    setAuthCookie(res, user.id);
-
-    return res.status(200).json({
-      success: true,
-      message: "Login successful",
-    });
-  } catch (error: any) {
-    console.error("Login error:", error);
-
-    // Generic error message (same as secure version)
-    // Don't reveal database details
-    return res.status(500).json({
-      success: false,
-      message: "Login failed",
-    });
+  } finally {
+    await closeConnection();
   }
 }
