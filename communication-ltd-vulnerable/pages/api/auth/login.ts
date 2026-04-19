@@ -1,7 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection, closeConnection, allAsync } from "@/lib/db";
+import { getConnection, closeConnection, allAsync, getAsync, runAsync } from "@/lib/db";
 import { hashPasswordHMAC } from "@/lib/auth";
 import { setAuthCookie } from "@/lib/cookies";
+import { getPasswordConfig } from "@/lib/passwordConfig";
 
 type ResponseData = {
   success: boolean;
@@ -58,9 +59,9 @@ export default async function handler(
       const query = `SELECT * FROM Users WHERE username = '${username}'`;
 
       // VULNERABLE: Direct string query with concatenation
-      const result = await allAsync(db, query);
+      const user = await getAsync(db, query);
 
-      if (result.length === 0) {
+      if (!user) {
         // Generic error message (same as secure version)
         // Note: Attackers can still use SQL injection to bypass this
         return res.status(401).json({
@@ -69,7 +70,14 @@ export default async function handler(
         });
       }
 
-      const user = result[0];
+      const config = getPasswordConfig();
+      const maxAttempts = config.maxLoginAttempts;
+      if (user.locked_until && new Date(user.locked_until) > new Date()) {
+        return res.status(403).json({
+          success: false,
+          message: "Account temporarily locked. Try again later.",
+        });
+      }
 
       // VULNERABLE: Hash password using HMAC with retrieved salt (same hashing as secure)
       // The vulnerability comes from the SQL query construction below, not the hashing
@@ -83,15 +91,33 @@ export default async function handler(
       const verifyQuery = `SELECT * FROM Users WHERE username = '${username}' AND password_hash = '${computedHash}'`;
 
       // VULNERABLE: Direct string query with concatenation
-      const verifyResult = await allAsync(db, verifyQuery);
+      const verifyResult = await getAsync(db, verifyQuery);
 
-      if (verifyResult.length === 0) {
+      if (!verifyResult) {
+         // VULNERABLE: Password doesn't match - increment login attempts
+        const newAttempts = user.login_attempts + 1;
+        let lockedUntil = null;
+
+        if (newAttempts >= maxAttempts) {
+          // Lock account for 15 minutes
+          lockedUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        }
+
+        // Update failed attempts (parameterized)
+        const updateQuery = `UPDATE Users SET login_attempts = ${newAttempts}, locked_until = '${lockedUntil}' WHERE id = ${user.id}`;
+        await runAsync(db, updateQuery);
+
+
         // Password doesn't match
         return res.status(401).json({
           success: false,
           message: "Invalid credentials",
         });
       }
+
+      // VULNERABLE: Reset login attempts on successful login
+      const resetQuery = `UPDATE Users SET login_attempts = 0, locked_until = NULL WHERE id = ${user.id}`;
+      await runAsync(db, resetQuery);
 
       // VULNERABLE: Set HTTP-only cookie (same mechanism as secure)
       // The vulnerability is in the query, not the cookie handling

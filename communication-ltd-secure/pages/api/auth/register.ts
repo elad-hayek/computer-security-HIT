@@ -2,12 +2,13 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection, closeConnection, getAsync, runAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
+  checkPasswordDictionary,
   hashPasswordHMAC,
   generateSalt,
   addPasswordToHistory,
 } from "@/lib/auth";
 import { setAuthCookie } from "@/lib/cookies";
-import { getPasswordConfig, isWeakPassword } from "@/lib/passwordConfig";
+import { getPasswordConfig } from "@/lib/passwordConfig";
 import { escape as htmlEscape } from "html-escaper";
 
 type ResponseData = {
@@ -82,11 +83,12 @@ export default async function handler(
   }
 
   // SECURE: Check weak password dictionary
-  if (config.dictionaryCheckEnabled && isWeakPassword(password)) {
+  const dictionaryCheck = checkPasswordDictionary(password);
+  if (dictionaryCheck.isWeak) {
     return res.status(400).json({
       success: false,
       message: htmlEscape(
-        "Password is too common. Please choose a more unique password.",
+        dictionaryCheck.suggestion || "Password validation failed",
       ),
       errors: ["WEAK_PASSWORD"],
     });

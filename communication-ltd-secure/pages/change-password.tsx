@@ -281,8 +281,7 @@ export default function ChangePassword() {
         </p>
 
         <p style={styles.note}>
-          🟢 SECURE: Password history checked to prevent reuse. Bcryptjs hashing
-          used.
+          🟢 SECURE: Password history checked to prevent reuse.
         </p>
       </div>
     </div>

@@ -8,6 +8,7 @@ import {
 } from "@/lib/db";
 import {
   validatePasswordPolicy,
+  checkPasswordDictionary,
   hashPasswordHMAC,
   generateSalt,
   checkPasswordHistory,
@@ -216,6 +217,16 @@ async function handleResetPassword(
       success: false,
       message: "Password does not meet requirements",
       errors: validation.errors,
+    });
+  }
+
+  // Check password dictionary
+  const dictionaryCheck = checkPasswordDictionary(newPassword);
+  if (dictionaryCheck.isWeak) {
+    return res.status(400).json({
+      success: false,
+      message: dictionaryCheck.suggestion || "Password validation failed",
+      errors: ["WEAK_PASSWORD"],
     });
   }
 

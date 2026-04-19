@@ -4,6 +4,7 @@
 
 import crypto from "crypto";
 import { allAsync, runAsync } from "./db";
+import { getPasswordConfig, isWeakPassword } from "./passwordConfig";
 
 /**
  * Hash password using HMAC-SHA256 with salt
@@ -85,12 +86,11 @@ export function validatePasswordPolicy(
  * SECURE: Check if password is in weak password dictionary
  * SECURITY: Dictionary attack prevention
  */
-export function checkPasswordDictionary(password: string): { // TODO: use this in register and change-password endpoints
+export function checkPasswordDictionary(password: string): {
   isWeak: boolean;
   suggestion?: string;
 } {
   try {
-    const { getPasswordConfig, isWeakPassword } = require("./passwordConfig");
     const config = getPasswordConfig();
 
     if (config.dictionaryCheckEnabled && isWeakPassword(password)) {
@@ -172,6 +172,7 @@ export async function addPasswordToHistory(
 
 export default {
   validatePasswordPolicy,
+  checkPasswordDictionary,
   checkPasswordHistory,
   addPasswordToHistory,
 };

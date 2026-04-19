@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection, closeConnection, getAsync, runAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
+  checkPasswordDictionary,
   hashPasswordHMAC,
   generateSalt,
   checkPasswordHistory,
@@ -113,6 +114,16 @@ export default async function handler(
           success: false,
           message: "New password does not meet requirements",
           errors: validation.errors,
+        });
+      }
+
+      // Check password dictionary
+      const dictionaryCheck = checkPasswordDictionary(newPassword);
+      if (dictionaryCheck.isWeak) {
+        return res.status(400).json({
+          success: false,
+          message: dictionaryCheck.suggestion || "Password validation failed",
+          errors: ["WEAK_PASSWORD"],
         });
       }
 

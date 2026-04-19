@@ -260,7 +260,7 @@ export default function Register() {
         </p>
 
         <p style={styles.note}>
-          SECURE: Passwords hashed with bcryptjs. Parameterized queries prevent
+          SECURE: Passwords hashed. Parameterized queries prevent
           SQL injection. Password history tracked to prevent reuse.
         </p>
       </div>

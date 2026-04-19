@@ -2,12 +2,13 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection, closeConnection, runAsync, getAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
+  checkPasswordDictionary,
   hashPasswordHMAC,
   generateSalt,
   addPasswordToHistory,
 } from "@/lib/auth";
 import { setAuthCookie } from "@/lib/cookies";
-import { getPasswordConfig, isWeakPassword } from "@/lib/passwordConfig";
+import { getPasswordConfig } from "@/lib/passwordConfig";
 import { escape as htmlEscape } from "html-escaper";
 
 type ResponseData = {
@@ -60,6 +61,15 @@ export default async function handler(
       .json({ success: false, message: htmlEscape("Passwords do not match") });
   }
 
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res
+      .status(400)
+      .json({ success: false, message: htmlEscape("Invalid email format") });
+  }
+
+
   // Get password policy from config file
   const config = getPasswordConfig();
 
@@ -73,12 +83,13 @@ export default async function handler(
     });
   }
 
-  // VULNERABLE: Dictionary check (but error is same as secure version)
-  if (config.dictionaryCheckEnabled && isWeakPassword(password)) {
+  // VULNERABLE: Check password dictionary
+  const dictionaryCheck = checkPasswordDictionary(password);
+  if (dictionaryCheck.isWeak) {
     return res.status(400).json({
       success: false,
       message: htmlEscape(
-        "Password is too common. Please choose a more unique password.",
+        dictionaryCheck.suggestion || "Password validation failed",
       ),
       errors: ["WEAK_PASSWORD"],
     });

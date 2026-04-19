@@ -2,6 +2,8 @@
 // This file demonstrates SECURE authentication practices
 
 import crypto from "crypto";
+import { getPasswordConfig, isWeakPassword } from "./passwordConfig";
+import { allAsync } from "./db";
 
 /**
  * SECURE: Hash password using HMAC-SHA256 with salt
@@ -100,7 +102,7 @@ export async function checkPasswordHistory(
       ORDER BY created_date DESC 
       LIMIT ?
     `;
-    const results = await db.all(query, [userId, config.passwordHistory]);
+    const results = await allAsync(db, query, [userId, config.passwordHistory]);
 
     // Check if new password matches any of the last N passwords
     for (const row of results) {
@@ -144,8 +146,34 @@ export async function addPasswordToHistory(
   }
 }
 
+/**
+ * SECURE: Check if password is in weak password dictionary
+ * SECURITY: Dictionary attack prevention
+ */
+export function checkPasswordDictionary(password: string): {
+  isWeak: boolean;
+  suggestion?: string;
+} {
+  try {
+    const config = getPasswordConfig();
+
+    if (config.dictionaryCheckEnabled && isWeakPassword(password)) {
+      return {
+        isWeak: true,
+        suggestion:
+          "This password is too common. Please choose a more unique password.",
+      };
+    }
+  } catch (error) {
+    console.warn("Could not check password dictionary:", error);
+  }
+
+  return { isWeak: false };
+}
+
 export default {
   validatePasswordPolicy,
+  checkPasswordDictionary,
   checkPasswordHistory,
   addPasswordToHistory,
 };
