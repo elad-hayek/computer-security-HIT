@@ -59,6 +59,7 @@ next-env.d.ts
 # project specific
 .env.local
 database/(*.backup|*.bak)
+local-tests/
 
 # SQLite database files (local development only)
 data/

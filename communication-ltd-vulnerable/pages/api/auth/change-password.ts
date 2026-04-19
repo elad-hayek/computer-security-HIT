@@ -2,8 +2,8 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection, closeConnection, getAsync, runAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
-  hashPasswordSecure,
-  comparePasswordsSecure,
+  hashPasswordHMAC,
+  generateSalt,
   checkPasswordHistory,
   addPasswordToHistory,
 } from "@/lib/auth";
@@ -21,10 +21,11 @@ type ResponseData = {
  * POST /api/auth/change-password
  *
  * VULNERABILITIES:
- * 1. No verification of old password - attackers can change any user's password
- * 2. Plain text password storage (no hashing)
- * 3. SQL injection in queries via string concatenation
+ * 1. SQL injection via string concatenation in user query (WHERE id = ${userId})
+ * 2. SQL injection in old password verification query
+ * 3. SQL injection in UPDATE query for new password and salt
  * 4. VULNERABLE PASSWORD HISTORY: Uses SQL injection in checkPasswordHistory function
+ * 5. Password history UPDATE also uses string concatenation
  */
 export default async function handler(
   req: NextApiRequest,
@@ -68,9 +69,12 @@ export default async function handler(
     try {
       const db = await getConnection();
 
+      // Get password policy from config first
+      const config = getPasswordConfig();
+
       // VULNERABLE: SQL injection via string concatenation
-      // Even though userId is numeric from cookie, the pattern demonstrates vulnerability
-      const userQuery = `SELECT id, password_hash FROM Users WHERE id = ${userId}`;
+      // Even though userId is numeric from cookie, demonstrates the pattern
+      const userQuery = `SELECT id, password_hash, salt FROM Users WHERE id = ${userId}`;
 
       const userResult = await getAsync(db, userQuery);
 
@@ -80,21 +84,27 @@ export default async function handler(
           .json({ success: false, message: "User not found" });
       }
 
-      // VULNERABLE: Verify old password using bcryptjs (same as secure version for consistency)
-      // This ensures only the real user can change their password
-      const oldPasswordMatch = await comparePasswordsSecure(
+      // VULNERABLE: Hash old password with stored salt
+      // Same hashing as secure (no vulnerability in hashing itself)
+      const oldPasswordHash = await hashPasswordHMAC(
         oldPassword,
-        userResult.password_hash,
+        userResult.salt,
       );
 
-      if (!oldPasswordMatch) {
+      // VULNERABLE: Verification query uses string concatenation - SQL INJECTION POSSIBLE
+      // Attack: if oldPasswordHash contains SQL injection payload, it can bypass verification
+      // Example: oldPasswordHash = "abc' OR '1'='1"
+      // Query becomes: SELECT * FROM Users WHERE id = 123 AND password_hash = 'abc' OR '1'='1'
+      // The OR condition makes it always true, bypassing password verification!
+      const verifyQuery = `SELECT id FROM Users WHERE id = ${userId} AND password_hash = '${oldPasswordHash}'`;
+
+      const verifyResult = await getAsync(db, verifyQuery);
+
+      if (!verifyResult) {
         return res
           .status(401)
           .json({ success: false, message: "Old password is incorrect" });
       }
-
-      // Get password policy from config
-      const config = getPasswordConfig();
 
       // Validate new password against policy
       const validation = validatePasswordPolicy(newPassword, config);
@@ -121,18 +131,23 @@ export default async function handler(
         });
       }
 
-      // VULNERABLE: Hash password using bcryptjs (same as secure)
-      const newHash = await hashPasswordSecure(newPassword);
+      // VULNERABLE: Generate new salt (same as secure)
+      // No vulnerability in salt generation itself
+      const newSalt = generateSalt();
+
+      // VULNERABLE: Hash password using HMAC (same as secure)
+      const newHash = await hashPasswordHMAC(newPassword, newSalt);
 
       // VULNERABLE: SQL injection via string concatenation in UPDATE query
-      // Attack: If newHash contained quotes, it could break SQL syntax
+      // Attack: If newHash or newSalt contained quotes, it could break SQL syntax
       // Example: newHash = "test'; DROP TABLE Users; --"
-      const updateQuery = `UPDATE Users SET password_hash = '${newHash}', password_changed_date = CURRENT_TIMESTAMP WHERE id = ${userId}`;
+      // This demonstrates SQL injection through parameter values in string concatenation
+      const updateQuery = `UPDATE Users SET password_hash = '${newHash}', salt = '${newSalt}', password_changed_date = CURRENT_TIMESTAMP WHERE id = ${userId}`;
 
       await runAsync(db, updateQuery);
 
       // VULNERABLE: Add password to history with SQL injection
-      await addPasswordToHistory(userId, newHash, db);
+      await addPasswordToHistory(userId, newHash, newSalt, db);
 
       return res.status(200).json({
         success: true,

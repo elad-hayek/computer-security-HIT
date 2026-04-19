@@ -2,7 +2,8 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection, closeConnection, getAsync, runAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
-  hashPasswordSecure,
+  hashPasswordHMAC,
+  generateSalt,
   addPasswordToHistory,
 } from "@/lib/auth";
 import { setAuthCookie } from "@/lib/cookies";
@@ -20,10 +21,11 @@ type ResponseData = {
  * POST /api/auth/register
  *
  * This endpoint demonstrates SECURE practices:
- * 1. Password hashing with bcryptjs (12 salt rounds)
+ * 1. Password hashing with HMAC-SHA256 and random salt
  * 2. Parameterized queries prevent SQL Injection
- * 3. Password history tracking in separate table
- * 4. Proper error handling and validation
+ * 3. Salt stored per user for password verification
+ * 4. Password history tracking in separate table
+ * 5. Proper error handling and validation
  */
 export default async function handler(
   req: NextApiRequest,
@@ -94,13 +96,16 @@ export default async function handler(
     try {
       const db = await getConnection();
 
-      // SECURE: Hash password with bcryptjs
-      const passwordHash = await hashPasswordSecure(password);
+      // SECURE: Generate random salt (16 bytes)
+      const salt = generateSalt();
 
-      // SECURE: Use parameterized query with new fields
+      // SECURE: Hash password with HMAC-SHA256 using the salt
+      const passwordHash = await hashPasswordHMAC(password, salt);
+
+      // SECURE: Use parameterized query with new fields including salt
       const query = `
-        INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, created_date) 
-        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, salt, created_date) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       `;
 
       await runAsync(db, query, [
@@ -110,6 +115,7 @@ export default async function handler(
         lastName || null,
         phone || null,
         passwordHash,
+        salt,
       ]);
 
       // Get the newly created user's ID to add to password history
@@ -117,8 +123,8 @@ export default async function handler(
       const user = await getAsync(db, userQuery, [username]);
 
       if (user) {
-        // Add initial password to history
-        await addPasswordToHistory(user.id, passwordHash, db);
+        // Add initial password to history (with salt)
+        await addPasswordToHistory(user.id, passwordHash, salt, db);
 
         // SECURE: Set HTTP-only cookie for authentication
         setAuthCookie(res, user.id);
@@ -136,12 +142,10 @@ export default async function handler(
         error.message.includes("UNIQUE") ||
         error.message.includes("duplicate")
       ) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Username or email already exists",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Username or email already exists",
+        });
       }
 
       return res.status(500).json({

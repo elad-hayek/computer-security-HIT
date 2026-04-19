@@ -8,7 +8,8 @@ import {
 } from "@/lib/db";
 import {
   validatePasswordPolicy,
-  hashPasswordSecure,
+  hashPasswordHMAC,
+  generateSalt,
   checkPasswordHistory,
   addPasswordToHistory,
 } from "@/lib/auth";
@@ -244,13 +245,21 @@ async function handleResetPassword(
       // VULNERABILITY: No password history check
       // Users can reuse old passwords
 
-      // VULNERABILITY: Weak password hashing (plain text or weak hash)
-      const newHash = await hashPasswordSecure(newPassword);
+      // VULNERABLE: Generate new salt (same as secure, no vulnerability here)
+      const newSalt = generateSalt();
+
+      // VULNERABLE: Hash password using HMAC-SHA256 (same as secure, no vulnerability here)
+      const newHash = await hashPasswordHMAC(newPassword, newSalt);
 
       // VULNERABILITY: SQL Injection in update query
-      const updateQuery = `UPDATE Users SET password_hash = '${newHash}', password_changed_date = CURRENT_TIMESTAMP WHERE id = ${codeData.user_id}`;
+      // If newHash or newSalt contain quotes, they can break SQL syntax
+      // Example: newHash = "test'; DROP TABLE Users; --"
+      const updateQuery = `UPDATE Users SET password_hash = '${newHash}', salt = '${newSalt}', password_changed_date = CURRENT_TIMESTAMP WHERE id = ${codeData.user_id}`;
 
       await runAsync(db, updateQuery);
+
+      // VULNERABILITY: Add password to history with SQL injection
+      await addPasswordToHistory(codeData.user_id, newHash, newSalt, db);
 
       // VULNERABILITY: Token NOT marked as used
       // Can be reused multiple times (replay attack)

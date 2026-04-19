@@ -1,45 +1,37 @@
 // VULNERABLE VERSION - SQL Injection & XSS vulnerabilities
-// Uses bcrypt for password hashing (same as secure) but vulnerable queries
+// Uses HMAC-SHA256 for password hashing (same as secure) but vulnerable queries
 // This file demonstrates INSECURE authentication practices for educational purposes
 
-import bcryptjs from "bcryptjs";
 import crypto from "crypto";
 import { allAsync, runAsync } from "./db";
 
-const SALT_ROUNDS = 12; // bcryptjs salt rounds for hashing
-
 /**
- * SECURE: Hash password using bcryptjs
- * WHY THIS IS SECURE:
- * - Uses bcryptjs algorithm (adaptive and slowing)
- * - Resists brute force attacks through salt + rounds
- * - Even with modern GPU, takes significant time to break
- * - OWASP and NIST recommended
+ * Hash password using HMAC-SHA256 with salt
+ * Same secure hashing as secure version (no vulnerability in hashing itself)
+ * Vulnerability comes from SQL query construction in API endpoints
  *
  * IMPLEMENTATION:
- * - Salt rounds = 12 (configurable for performance/security balance)
- * - Each round doubles the time to hash
- * - Recommended: 10-12 rounds (updates as computers get faster)
+ * - Salt: Random 16-byte hex-encoded value
+ * - Algorithm: HMAC-SHA256
+ * - Output: Hex-encoded HMAC hash
  */
-export async function hashPasswordSecure(password: string): Promise<string> {
-  // bcryptjs automatically generates and includes salt in the hash
-  // Format: $2a$12$...
-  return bcryptjs.hash(password, SALT_ROUNDS);
+export async function hashPasswordHMAC(
+  password: string,
+  salt: string,
+): Promise<string> {
+  // Same as secure version - uses crypto module built into Node.js
+  const hmac = crypto.createHmac("sha256", salt);
+  hmac.update(password);
+  return hmac.digest("hex");
 }
 
 /**
- * SECURE: Compare passwords safely
- * WHY THIS IS SECURE:
- * - Uses timing-safe comparison (bcryptjs.compare)
- * - Prevents timing attacks where attacker measures response time
- * - Always takes roughly same time regardless of match position
+ * Generate random salt for password hashing
+ * Returns 16-byte random salt as hex string
+ * Same as secure version
  */
-export async function comparePasswordsSecure(
-  provided: string,
-  stored: string,
-): Promise<boolean> {
-  // SECURE: bcryptjs.compare is timing-safe
-  return bcryptjs.compare(provided, stored);
+export function generateSalt(): string {
+  return crypto.randomBytes(16).toString("hex");
 }
 
 /**
@@ -93,7 +85,7 @@ export function validatePasswordPolicy(
  * SECURE: Check if password is in weak password dictionary
  * SECURITY: Dictionary attack prevention
  */
-export function checkPasswordDictionary(password: string): {
+export function checkPasswordDictionary(password: string): { // TODO: use this in register and change-password endpoints
   isWeak: boolean;
   suggestion?: string;
 } {
@@ -129,7 +121,7 @@ export async function checkPasswordHistory(
     // VULNERABLE: String concatenation - SQL injection possible
     // If userId is not properly validated/sanitized, attacker could craft SQL injection
     const query = `
-      SELECT password_hash FROM PasswordHistory 
+      SELECT password_hash, salt FROM PasswordHistory 
       WHERE user_id = ${userId} 
       ORDER BY created_date DESC 
       LIMIT ${config.passwordHistory}
@@ -138,8 +130,9 @@ export async function checkPasswordHistory(
 
     // Check if new password matches any of the last N passwords
     for (const row of results) {
-      const isMatch = await comparePasswordsSecure(password, row.password_hash);
-      if (isMatch) {
+      // Compute HMAC hash of new password with historical salt
+      const computedHash = await hashPasswordHMAC(password, row.salt);
+      if (computedHash === row.password_hash) {
         return {
           valid: false,
           reason: `Cannot reuse a password from the last ${config.passwordHistory} times.`,
@@ -161,14 +154,15 @@ export async function checkPasswordHistory(
 export async function addPasswordToHistory(
   userId: number,
   passwordHash: string,
+  salt: string,
   db: any,
 ): Promise<void> {
   try {
     // VULNERABLE: String concatenation in INSERT
-    // If passwordHash contains quotes, it could break SQL syntax
+    // If passwordHash or salt contains quotes, it could break SQL syntax
     const query = `
-      INSERT INTO PasswordHistory (user_id, password_hash, created_date)
-      VALUES (${userId}, '${passwordHash}', CURRENT_TIMESTAMP)
+      INSERT INTO PasswordHistory (user_id, password_hash, salt, created_date)
+      VALUES (${userId}, '${passwordHash}', '${salt}', CURRENT_TIMESTAMP)
     `;
     await runAsync(db, query);
   } catch (error) {
@@ -177,8 +171,6 @@ export async function addPasswordToHistory(
 }
 
 export default {
-  hashPasswordSecure,
-  comparePasswordsSecure,
   validatePasswordPolicy,
   checkPasswordHistory,
   addPasswordToHistory,

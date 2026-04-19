@@ -2,7 +2,8 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection, closeConnection, runAsync, getAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
-  hashPasswordSecure,
+  hashPasswordHMAC,
+  generateSalt,
   addPasswordToHistory,
 } from "@/lib/auth";
 import { setAuthCookie } from "@/lib/cookies";
@@ -20,10 +21,11 @@ type ResponseData = {
  * POST /api/auth/register
  *
  * This endpoint demonstrates INSECURE practices:
- * 1. Plain-text password storage (NO hashing)
- * 2. Direct SQL string concatenation (SQL Injection vulnerability)
+ * 1. Password hashing with HMAC-SHA256 (same secure hashing, no vulnerability here)
+ * 2. Direct SQL string concatenation (SQL Injection vulnerability in INSERT and SELECT)
  * 3. No proper input validation/sanitization
  * 4. VULNERABLE PASSWORD HISTORY: String concatenation in PasswordHistory insert
+ * 5. SQL injection can be exploited via username, email, firstName, lastName, phone, or salt fields
  */
 export default async function handler(
   req: NextApiRequest,
@@ -84,18 +86,22 @@ export default async function handler(
 
   try {
     try {
-      // VULNERABLE: Hash password using bcryptjs (same as secure)
+      // VULNERABLE: Generate salt (same as secure version)
       // The vulnerability is in the SQL queries, not password hashing
-      const passwordHash = await hashPasswordSecure(password);
+      const salt = generateSalt();
+
+      // VULNERABLE: Hash password using HMAC-SHA256 (same as secure)
+      // The vulnerability is in the SQL queries, not password hashing
+      const passwordHash = await hashPasswordHMAC(password, salt);
 
       // VULNERABLE: Build query with string concatenation - SQL INJECTION POSSIBLE
       // This allows SQL injection attacks!
       // Attack examples:
       //   username = "admin'); DROP TABLE Users; --"
       //   username = "' OR '1'='1'); INSERT INTO Users... --"
-      // Also XSS via firstName:
       //   firstName = "<img src=x onerror='alert(1)'>"
-      const query = `INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, created_date) VALUES ('${username}', '${email}', '${firstName || ""}', '${lastName || ""}', '${phone || ""}', '${passwordHash}', CURRENT_TIMESTAMP)`;
+      //   salt or passwordHash could also be injected
+      const query = `INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, salt, created_date) VALUES ('${username}', '${email}', '${firstName || ""}', '${lastName || ""}', '${phone || ""}', '${passwordHash}', '${salt}', CURRENT_TIMESTAMP)`;
 
       const db = await getConnection();
 
@@ -108,7 +114,7 @@ export default async function handler(
 
       if (user) {
         // VULNERABLE: Password history with SQL injection
-        await addPasswordToHistory(user.id, passwordHash, db);
+        await addPasswordToHistory(user.id, passwordHash, salt, db);
 
         // VULNERABLE: Set HTTP-only cookie (same as secure)
         setAuthCookie(res, user.id);
@@ -126,12 +132,10 @@ export default async function handler(
         error.message.includes("UNIQUE") ||
         error.message.includes("duplicate")
       ) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Username or email already exists",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Username or email already exists",
+        });
       }
 
       // Generic error message (same as secure version)

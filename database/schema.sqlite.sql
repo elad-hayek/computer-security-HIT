@@ -9,6 +9,7 @@
 -- - username UNIQUE: Prevents duplicate accounts per business rule
 -- - email UNIQUE: Unique email per user
 -- - password_hash: Store hashed password (NEVER plain text)
+-- - salt: Random 16-byte salt for HMAC-SHA256 hashing (hex encoded)
 -- - first_name, last_name, phone: User contact information
 -- - login_attempts: Track failed logins for rate limiting
 -- - locked_until: Timestamp for account lockout after N failed attempts
@@ -22,6 +23,7 @@ CREATE TABLE IF NOT EXISTS Users (
     last_name TEXT,
     phone TEXT,
     password_hash TEXT NOT NULL,
+    salt TEXT NOT NULL,
     password_changed_date DATETIME,
     login_attempts INTEGER DEFAULT 0,
     locked_until DATETIME,
@@ -34,6 +36,7 @@ CREATE TABLE IF NOT EXISTS Users (
 -- Why these fields:
 -- - user_id (FK): Links password history to user
 -- - password_hash: Historical password hash (prevent reuse)
+-- - salt: Salt used for this historical password (for verification if needed)
 -- - created_date: When this password was set
 -- Used to enforce "cannot reuse last N passwords" policy
 -- =============================================
@@ -41,6 +44,7 @@ CREATE TABLE IF NOT EXISTS PasswordHistory (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     password_hash TEXT NOT NULL,
+    salt TEXT NOT NULL,
     created_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
 );
@@ -77,8 +81,8 @@ CREATE INDEX IF NOT EXISTS IDX_PasswordResetTokens_TokenHash ON PasswordResetTok
 -- Sample Data (Optional - Remove for production)
 -- =============================================
 -- Example user: username=testuser, password (plain for reference only): TestPass123
--- In real scenario, password_hash would contain bcryptjs hash
-INSERT OR IGNORE INTO Users (id, username, email, first_name, last_name, phone, password_hash, created_date)
+-- In real scenario, password_hash would contain HMAC-SHA256 hash with corresponding salt
+INSERT OR IGNORE INTO Users (id, username, email, first_name, last_name, phone, password_hash, salt, created_date)
 VALUES (
     1,
     'testuser',
@@ -87,6 +91,7 @@ VALUES (
     'User',
     '+1234567890',
     '$2b$12$CuSprHMc3tpnjTB8pfhjmuSNggTR/28AqTyQsix3NbM61nCtFzQuy',
+    '0000000000000000000000000000000000000000',
     CURRENT_TIMESTAMP
 );
 

@@ -1,43 +1,37 @@
-// SECURE VERSION - Password hashing with bcryptjs, parameterized queries
+// SECURE VERSION - Password hashing with HMAC-SHA256 and parameterized queries
 // This file demonstrates SECURE authentication practices
 
-import bcryptjs from "bcryptjs";
 import crypto from "crypto";
 
-const SALT_ROUNDS = 12; // bcryptjs salt rounds for hashing
-
 /**
- * SECURE: Hash password using bcryptjs
+ * SECURE: Hash password using HMAC-SHA256 with salt
  * WHY THIS IS SECURE:
- * - Uses bcryptjs algorithm (adaptive and slowing)
- * - Resists brute force attacks through salt + rounds
- * - Even with modern GPU, takes significant time to break
- * - OWASP and NIST recommended
+ * - HMAC-SHA256 provides cryptographic strength
+ * - Each password has a unique 16-byte random salt
+ * - Salted hashes prevent rainbow table attacks
+ * - Query-based verification uses parameterized queries (no SQL injection)
  *
  * IMPLEMENTATION:
- * - Salt rounds = 12 (configurable for performance/security balance)
- * - Each round doubles the time to hash
- * - Recommended: 10-12 rounds (updates as computers get faster)
+ * - Salt: Random 16-byte hex-encoded value
+ * - Algorithm: HMAC-SHA256
+ * - Output: Hex-encoded HMAC hash
  */
-export async function hashPasswordSecure(password: string): Promise<string> {
-  // bcryptjs automatically generates and includes salt in the hash
-  // Format: $2a$12$...
-  return bcryptjs.hash(password, SALT_ROUNDS);
+export async function hashPasswordHMAC(
+  password: string,
+  salt: string,
+): Promise<string> {
+  // SECURE: Use crypto module built into Node.js
+  const hmac = crypto.createHmac("sha256", salt);
+  hmac.update(password);
+  return hmac.digest("hex");
 }
 
 /**
- * SECURE: Compare passwords safely
- * WHY THIS IS SECURE:
- * - Uses timing-safe comparison (bcryptjs.compare)
- * - Prevents timing attacks where attacker measures response time
- * - Always takes roughly same time regardless of match position
+ * SECURE: Generate random salt for password hashing
+ * Returns 16-byte random salt as hex string
  */
-export async function comparePasswordsSecure(
-  provided: string,
-  stored: string,
-): Promise<boolean> {
-  // SECURE: bcryptjs.compare is timing-safe
-  return bcryptjs.compare(provided, stored);
+export function generateSalt(): string {
+  return crypto.randomBytes(16).toString("hex");
 }
 
 /**
@@ -99,9 +93,9 @@ export async function checkPasswordHistory(
   config: any,
 ): Promise<{ valid: boolean; reason?: string }> {
   try {
-    // SECURE: Parameterized query to get last N password hashes
+    // SECURE: Parameterized query to get last N password hashes and salts
     const query = `
-      SELECT password_hash FROM PasswordHistory 
+      SELECT password_hash, salt FROM PasswordHistory 
       WHERE user_id = ? 
       ORDER BY created_date DESC 
       LIMIT ?
@@ -110,8 +104,9 @@ export async function checkPasswordHistory(
 
     // Check if new password matches any of the last N passwords
     for (const row of results) {
-      const isMatch = await comparePasswordsSecure(password, row.password_hash);
-      if (isMatch) {
+      // Compute HMAC hash of new password with historical salt
+      const computedHash = await hashPasswordHMAC(password, row.salt);
+      if (computedHash === row.password_hash) {
         return {
           valid: false,
           reason: `Cannot reuse a password from the last ${config.passwordHistory} times.`,
@@ -134,23 +129,22 @@ export async function checkPasswordHistory(
 export async function addPasswordToHistory(
   userId: number,
   passwordHash: string,
+  salt: string,
   db: any,
 ): Promise<void> {
   try {
-    // SECURE: Parameterized insert query
+    // SECURE: Parameterized insert query with salt
     const query = `
-      INSERT INTO PasswordHistory (user_id, password_hash, created_date)
-      VALUES (?, ?, CURRENT_TIMESTAMP)
+      INSERT INTO PasswordHistory (user_id, password_hash, salt, created_date)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
     `;
-    await db.run(query, [userId, passwordHash]);
+    await db.run(query, [userId, passwordHash, salt]);
   } catch (error) {
     console.error("Error adding password to history:", error);
   }
 }
 
 export default {
-  hashPasswordSecure,
-  comparePasswordsSecure,
   validatePasswordPolicy,
   checkPasswordHistory,
   addPasswordToHistory,

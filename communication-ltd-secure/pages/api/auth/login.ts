@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection, closeConnection, getAsync, runAsync } from "@/lib/db";
-import { comparePasswordsSecure } from "@/lib/auth";
+import { hashPasswordHMAC } from "@/lib/auth";
 import { setAuthCookie } from "@/lib/cookies";
 import { getPasswordConfig } from "@/lib/passwordConfig";
 
@@ -40,16 +40,13 @@ export default async function handler(
 
   try {
     try {
-      // SECURE: Use parameterized query
-      // WHY: SQLite treats ? as data placeholder, not code
-      // Even "admin' OR '1'='1' --" is just a literal string to match
       const db = await getConnection();
 
-      // SECURE: First query - find user by username only (parameterized)
-      const userQuery = `SELECT id, username, email, password_hash, login_attempts, locked_until FROM Users WHERE username = ?`;
-      const userResult = await getAsync(db, userQuery, [username]);
+      // SECURE: First, fetch user by username to get the salt (parameterized)
+      const userQuery = `SELECT id, username, email, salt, password_hash, login_attempts, locked_until FROM Users WHERE username = ?`;
+      const user = await getAsync(db, userQuery, [username]);
 
-      if (!userResult) {
+      if (!user) {
         // SECURE: Generic error message (no username enumeration)
         return res.status(401).json({
           success: false,
@@ -57,8 +54,7 @@ export default async function handler(
         });
       }
 
-      const user = userResult;
-      console.log(`Login attempt for user '${JSON.stringify(user)}'`);
+      console.log(`Login attempt for user '${user.username}'`);
 
       // SECURE: Check if account is locked
       const config = getPasswordConfig();
@@ -70,14 +66,20 @@ export default async function handler(
         });
       }
 
-      // SECURE: Compare hashed passwords with timing-safe function
-      const passwordMatch = await comparePasswordsSecure(
-        password,
-        user.password_hash,
-      );
+      // SECURE: Hash the provided password with the stored salt
+      const computedHash = await hashPasswordHMAC(password, user.salt);
 
-      if (!passwordMatch) {
-        // SECURE: Increment login attempts
+      // SECURE: Query to verify password - parameterized query with both username AND hash
+      // WHY: SQLite treats ? as data placeholder, not code
+      // Even if hash contains SQL injection attempts, it's treated as literal data
+      const verifyQuery = `SELECT id FROM Users WHERE username = ? AND password_hash = ?`;
+      const verifyResult = await getAsync(db, verifyQuery, [
+        username,
+        computedHash,
+      ]);
+
+      if (!verifyResult) {
+        // SECURE: Password doesn't match - increment login attempts
         const newAttempts = user.login_attempts + 1;
         let lockedUntil = null;
 

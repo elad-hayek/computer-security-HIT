@@ -2,7 +2,8 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection, closeConnection, getAsync, runAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
-  hashPasswordSecure,
+  hashPasswordHMAC,
+  generateSalt,
   checkPasswordHistory,
   addPasswordToHistory,
 } from "@/lib/auth";
@@ -269,20 +270,23 @@ async function handleResetPassword(
         });
       }
 
-      // SECURE: Hash new password with bcryptjs
-      const newHash = await hashPasswordSecure(newPassword);
+      // SECURE: Generate new salt for this password reset
+      const newSalt = generateSalt();
 
-      // SECURE: Parameterized update query
+      // SECURE: Hash new password with HMAC-SHA256
+      const newHash = await hashPasswordHMAC(newPassword, newSalt);
+
+      // SECURE: Parameterized update query with new salt
       const updateQuery = `
         UPDATE Users 
-        SET password_hash = ?, password_changed_date = CURRENT_TIMESTAMP 
+        SET password_hash = ?, salt = ?, password_changed_date = CURRENT_TIMESTAMP 
         WHERE id = ?
       `;
 
-      await runAsync(db, updateQuery, [newHash, codeData.user_id]);
+      await runAsync(db, updateQuery, [newHash, newSalt, codeData.user_id]);
 
-      // SECURE: Add new password to history
-      await addPasswordToHistory(codeData.user_id, newHash, db);
+      // SECURE: Add new password to history with salt
+      await addPasswordToHistory(codeData.user_id, newHash, newSalt, db);
 
       // SECURE: Mark code as used to prevent reuse
       const markUsedQuery = `UPDATE PasswordResetTokens SET used = 1 WHERE token_hash = ?`;

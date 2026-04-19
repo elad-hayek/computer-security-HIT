@@ -1,9 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getConnection, closeConnection, getAsync } from "@/lib/db";
+import { getConnection, closeConnection, getAsync, runAsync } from "@/lib/db";
 import {
   validatePasswordPolicy,
-  hashPasswordSecure,
-  comparePasswordsSecure,
+  hashPasswordHMAC,
+  generateSalt,
   checkPasswordHistory,
   addPasswordToHistory,
 } from "@/lib/auth";
@@ -24,7 +24,8 @@ type ResponseData = {
  * 1. Verification of old password (prevents unauthorized changes)
  * 2. Password history check using PasswordHistory table (prevents reuse of last N passwords)
  * 3. Parameterized queries prevent SQL injection
- * 4. Bcryptjs password hashing
+ * 4. HMAC-SHA256 password hashing with per-user salt
+ * 5. New salt generated for each password change
  */
 export default async function handler(
   req: NextApiRequest,
@@ -80,8 +81,8 @@ export default async function handler(
     try {
       const db = await getConnection();
 
-      // SECURE: Parameterized query to fetch user
-      const userQuery = `SELECT id, password_hash FROM Users WHERE id = ?`;
+      // SECURE: Parameterized query to fetch user with salt
+      const userQuery = `SELECT id, password_hash, salt FROM Users WHERE id = ?`;
       const user = await getAsync(db, userQuery, [userId]);
 
       if (!user) {
@@ -90,20 +91,24 @@ export default async function handler(
           .json({ success: false, message: "User not found" });
       }
 
-      // SECURE: Verify old password before allowing change
-      // WHY: Ensures only the real user can change their own password
-      const oldPasswordMatch = await comparePasswordsSecure(
-        oldPassword,
-        user.password_hash,
-      );
+      // SECURE: Hash old password with stored salt
+      const oldPasswordHash = await hashPasswordHMAC(oldPassword, user.salt);
 
-      if (!oldPasswordMatch) {
+      // SECURE: Verify old password - parameterized query
+      // WHY: Ensures only the real user can change their own password
+      const verifyQuery = `SELECT id FROM Users WHERE id = ? AND password_hash = ?`;
+      const verifyResult = await getAsync(db, verifyQuery, [
+        userId,
+        oldPasswordHash,
+      ]);
+
+      if (!verifyResult) {
         return res
           .status(401)
           .json({ success: false, message: "Old password is incorrect" });
       }
 
-      // SECURE: Check password history using new PasswordHistory table
+      // SECURE: Check password history using PasswordHistory table
       // WHY: Prevents reusing same password multiple times
       const historyCheck = await checkPasswordHistory(
         userId,
@@ -119,21 +124,25 @@ export default async function handler(
         });
       }
 
-      // SECURE: Hash new password
-      const newHash = await hashPasswordSecure(newPassword);
+      // SECURE: Generate new salt for this password change
+      const newSalt = generateSalt();
 
-      // SECURE: Parameterized update query
+      // SECURE: Hash new password with new salt
+      const newHash = await hashPasswordHMAC(newPassword, newSalt);
+
+      // SECURE: Parameterized update query with new salt and hash
       const updateQuery = `
         UPDATE Users 
         SET password_hash = ?, 
+            salt = ?,
             password_changed_date = CURRENT_TIMESTAMP 
         WHERE id = ?
       `;
 
-      await db.run(updateQuery, [newHash, userId]);
+      await runAsync(db, updateQuery, [newHash, newSalt, userId]);
 
-      // SECURE: Add new password to history
-      await addPasswordToHistory(userId, newHash, db);
+      // SECURE: Add new password to history (with new salt)
+      await addPasswordToHistory(userId, newHash, newSalt, db);
 
       return res.status(200).json({
         success: true,
