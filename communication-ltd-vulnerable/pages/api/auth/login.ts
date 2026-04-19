@@ -79,6 +79,7 @@ export default async function handler(
 
       const user = result[0];
 
+      // TODO: i cant do sqli in this version because of the bcryptjs hashing need to fix this
       // FIXED: Now using proper bcryptjs comparison instead of hashing in the query
       // This prevents the logic bug that made login impossible
       const passwordMatch = await comparePasswordsSecure(
