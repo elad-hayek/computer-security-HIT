@@ -98,6 +98,15 @@ export default async function handler(
     try {
       const db = await getConnection();
 
+      const existingUserQuery = `SELECT id FROM Users WHERE username = ? OR email = ?`;
+      const existingUser = await getAsync(db, existingUserQuery, [username, email]);
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: "Username or email already exists",
+        });
+      }
+
       // SECURE: Generate random salt (16 bytes)
       const salt = generateSalt();
 

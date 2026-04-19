@@ -97,6 +97,7 @@ export default async function handler(
 
   try {
     try {
+      
       // VULNERABLE: Generate salt (same as secure version)
       // The vulnerability is in the SQL queries, not password hashing
       const salt = generateSalt();
@@ -112,10 +113,20 @@ export default async function handler(
       //   username = "' OR '1'='1'); INSERT INTO Users... --"
       //   firstName = "<img src=x onerror='alert(1)'>"
       //   salt or passwordHash could also be injected
-      const query = `INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, salt, created_date) VALUES ('${username}', '${email}', '${firstName || ""}', '${lastName || ""}', '${phone || ""}', '${passwordHash}', '${salt}', CURRENT_TIMESTAMP)`;
-
+      
       const db = await getConnection();
+      
+      const existingUserQuery = `SELECT id FROM Users WHERE username = '${username}' OR email = '${email}'`;
+      const existingUser = await getAsync(db, existingUserQuery);
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: "Username or email already exists",
+        });
+      }
 
+      const query = `INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, salt, created_date) VALUES ('${username}', '${email}', '${firstName || ""}', '${lastName || ""}', '${phone || ""}', '${passwordHash}', '${salt}', CURRENT_TIMESTAMP)`;
+      
       // VULNERABLE: Direct string execution
       await runAsync(db, query);
 
