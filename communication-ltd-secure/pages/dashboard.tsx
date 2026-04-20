@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
+import { escape as htmlEscape } from "html-escaper";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -107,13 +108,26 @@ export default function Dashboard() {
                 <span style={styles.label}>Email:</span>
                 <span style={styles.value}>{userInfo.email}</span>
               </div>
-              <div style={styles.detailRow}>
+              {/* <div style={styles.detailRow}>
                 <span style={styles.label}>First Name:</span>
                 <span style={styles.value}>
                   {userInfo.firstName
                     ? userInfo.firstName
                     : "Not provided"}
                 </span>
+              </div> */}
+              <div style={styles.detailRow}>
+                <span style={styles.label}>First Name:</span>
+                {/* SECURE XSS: react sanitizes html bt default but in here we show how to do it manually*/}
+                <span
+                  style={styles.value}
+                  dangerouslySetInnerHTML={{
+                    __html:
+                      userInfo.firstName
+                        ? htmlEscape(userInfo.firstName)
+                        : "Not provided",
+                  }}
+                />
               </div>
              <div style={styles.detailRow}>
                 <span style={styles.label}>Last Name:</span>
