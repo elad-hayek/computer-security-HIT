@@ -108,10 +108,18 @@ export default function Dashboard() {
                 <span style={styles.value}>{userInfo.email}</span>
               </div>
               <div style={styles.detailRow}>
-                <span style={styles.label}>Full Name:</span>
+                <span style={styles.label}>First Name:</span>
                 <span style={styles.value}>
-                  {userInfo.firstName && userInfo.lastName
-                    ? `${userInfo.firstName} ${userInfo.lastName}`
+                  {userInfo.firstName
+                    ? userInfo.firstName
+                    : "Not provided"}
+                </span>
+              </div>
+             <div style={styles.detailRow}>
+                <span style={styles.label}>Last Name:</span>
+                <span style={styles.value}>
+                  {userInfo.lastName
+                    ? userInfo.lastName
                     : "Not provided"}
                 </span>
               </div>

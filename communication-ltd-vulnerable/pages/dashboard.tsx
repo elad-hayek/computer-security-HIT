@@ -121,14 +121,27 @@ export default function Dashboard() {
                 />
               </div>
               <div style={styles.detailRow}>
-                <span style={styles.label}>Full Name:</span>
-                {/* VULNERABLE XSS: First/Last name rendered as HTML without escaping */}
+                <span style={styles.label}>First Name:</span>
+                {/* VULNERABLE XSS: First name rendered as HTML without escaping */}
                 <span
                   style={styles.value}
                   dangerouslySetInnerHTML={{
                     __html:
-                      userInfo.firstName && userInfo.lastName
-                        ? `${userInfo.firstName} ${userInfo.lastName}`
+                      userInfo.firstName
+                        ? userInfo.firstName
+                        : "Not provided",
+                  }}
+                />
+              </div>
+              <div style={styles.detailRow}>
+                <span style={styles.label}>Last Name:</span>
+                {/* VULNERABLE XSS: Last name rendered as HTML without escaping */}
+                <span
+                  style={styles.value}
+                  dangerouslySetInnerHTML={{
+                    __html:
+                      userInfo.lastName
+                        ? userInfo.lastName
                         : "Not provided",
                   }}
                 />

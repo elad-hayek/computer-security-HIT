@@ -109,9 +109,8 @@ export default async function handler(
       // VULNERABLE: Build query with string concatenation - SQL INJECTION POSSIBLE
       // This allows SQL injection attacks!
       // Attack examples:
-      //   username = "admin'); DROP TABLE Users; --"
-      //   username = "' OR '1'='1'); INSERT INTO Users... --"
-      //   firstName = "<img src=x onerror='alert(1)'>"
+      //   firstName = "<img src=x onerror=alert(1)>"
+      //   phone = 050000000', 'default', 'default', CURRENT_TIMESTAMP), ('attacker', 'attacker@example.com', 'Attacker', 'User', '555-1234', 'fakehash123456', 'fakesalt123456', CURRENT_TIMESTAMP) --
       //   salt or passwordHash could also be injected
       
       const db = await getConnection();
@@ -126,7 +125,9 @@ export default async function handler(
       }
 
       const query = `INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, salt, created_date) VALUES ('${username}', '${email}', '${firstName || ""}', '${lastName || ""}', '${phone || ""}', '${passwordHash}', '${salt}', CURRENT_TIMESTAMP)`;
-      
+      console.log("Executing query:", query); // Log the query for debugging (vulnerable)
+
+
       // VULNERABLE: Direct string execution
       await runAsync(db, query);
 
