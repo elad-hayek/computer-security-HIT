@@ -18,6 +18,7 @@ export default function Dashboard() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -68,16 +69,38 @@ export default function Dashboard() {
 
   const handleSearch = (value: string) => {
     setSearchTerm(value);
-    if (!value.trim()) {
-      setFilteredCustomers(customers);
-    } else {
-      const term = value.toLowerCase();
-      const filtered = customers.filter(
-        (c) =>
-          c.first_name.toLowerCase().includes(term) ||
-          c.last_name.toLowerCase().includes(term),
-      );
-      setFilteredCustomers(filtered);
+  };
+
+  const handleSearchClick = async () => {
+    try {
+      setIsSearching(true);
+      setError(null);
+      const query = searchTerm.trim()
+        ? `?search=${encodeURIComponent(searchTerm)}`
+        : "";
+      const response = await fetch(`/api/customers/list${query}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to search customers");
+      }
+
+      const data = await response.json();
+      if (data.success && data.customers) {
+        setFilteredCustomers(data.customers);
+      } else {
+        setError("Failed to search customers");
+      }
+    } catch (err) {
+      console.error("Search error:", err);
+      setError("Error searching customers");
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -212,17 +235,29 @@ export default function Dashboard() {
         {/* Search Bar */}
         <div style={styles.searchSection}>
           <h2>Search Customers</h2>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Search by first or last name..."
-            style={styles.searchInput}
-          />
-          <p style={styles.searchInfo}>
-            Found {filteredCustomers.length} customer
-            {filteredCustomers.length !== 1 ? "s" : ""}
-          </p>
+          <div style={styles.searchContainer}>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => handleSearch(e.target.value)}
+              onKeyPress={(e) => e.key === "Enter" && handleSearchClick()}
+              placeholder="Search by first or last name..."
+              style={styles.searchInput}
+            />
+            <button
+              onClick={handleSearchClick}
+              disabled={isSearching}
+              style={styles.searchButton}
+            >
+              {isSearching ? "Searching..." : "Search"}
+            </button>
+          </div>
+          {filteredCustomers.length > 0 && (
+            <p style={styles.searchInfo}>
+              Found {filteredCustomers.length} customer
+              {filteredCustomers.length !== 1 ? "s" : ""}
+            </p>
+          )}
         </div>
 
         {/* Customers Table */}
@@ -354,13 +389,29 @@ const styles = {
     borderLeft: "4px solid #4CAF50",
   },
   searchInput: {
-    width: "100%",
+    flex: 1,
     padding: "12px",
     border: "1px solid #ddd",
     borderRadius: "4px",
     fontSize: "14px",
-    marginBottom: "10px",
     boxSizing: "border-box" as const,
+  },
+  searchContainer: {
+    display: "flex" as const,
+    gap: "10px",
+    marginBottom: "10px",
+  },
+  searchButton: {
+    padding: "12px 24px",
+    backgroundColor: "#4CAF50",
+    color: "white",
+    border: "none",
+    borderRadius: "4px",
+    cursor: "pointer" as const,
+    fontSize: "14px",
+    fontWeight: "bold" as const,
+    whiteSpace: "nowrap" as const,
+    transition: "background-color 0.3s" as const,
   },
   searchInfo: {
     margin: "10px 0 0 0",
