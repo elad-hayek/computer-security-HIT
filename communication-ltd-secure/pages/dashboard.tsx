@@ -281,7 +281,7 @@ export default function Dashboard() {
                   {filteredCustomers.map((customer) => (
                     <tr key={customer.id} style={styles.tableRow}>
                       {/* SECURE: Use textContent to safely render customer names */}
-                      <td style={styles.tableCell}>{customer.first_name}</td>
+                      <td style={styles.tableCell} dangerouslySetInnerHTML={{ __html: htmlEscape(customer.first_name) }}></td>
                       <td style={styles.tableCell}>{customer.last_name}</td>
                       <td style={styles.tableCell}>
                         {customer.email ? htmlEscape(customer.email) : "-"}

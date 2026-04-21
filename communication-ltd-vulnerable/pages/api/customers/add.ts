@@ -23,7 +23,7 @@ type ResponseData = {
  * 1. SQL Injection via string concatenation in INSERT query
  * 2. No input sanitization - stored XSS possible
  * 3. Direct string concatenation allows arbitrary SQL in firstName/lastName/email
- * 4. Example attack: firstName = "<img src=x onerror=alert(1)>" → Stored XSS
+ * 4. Example attack: firstName = "<img src=x onerror="alert(1)">" → Stored XSS
  * 5. Example attack: firstName = "test', 1234); DROP TABLE Customers; --" → SQL injection
  */
 export default async function handler(
