@@ -68,6 +68,23 @@ CREATE TABLE IF NOT EXISTS PasswordResetTokens (
 );
 
 -- =============================================
+-- Customers Table - Customer Management
+-- Why these fields and constraints:
+-- - first_name, last_name: Customer name (required)
+-- - email: Customer contact email (optional)
+-- - created_date, updated_date: Timestamps for record tracking
+-- Note: No user_id foreign key - all users see all customers (shared/single-tenant)
+-- =============================================
+CREATE TABLE IF NOT EXISTS Customers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    email TEXT,
+    created_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =============================================
 -- Indexes for Performance
 -- =============================================
 CREATE INDEX IF NOT EXISTS IDX_Users_Username ON Users(username);
@@ -76,6 +93,8 @@ CREATE INDEX IF NOT EXISTS IDX_PasswordHistory_UserId ON PasswordHistory(user_id
 CREATE INDEX IF NOT EXISTS IDX_PasswordHistory_CreatedDate ON PasswordHistory(created_date);
 CREATE INDEX IF NOT EXISTS IDX_PasswordResetTokens_UserId ON PasswordResetTokens(user_id);
 CREATE INDEX IF NOT EXISTS IDX_PasswordResetTokens_TokenHash ON PasswordResetTokens(token_hash);
+CREATE INDEX IF NOT EXISTS IDX_Customers_FirstName ON Customers(first_name);
+CREATE INDEX IF NOT EXISTS IDX_Customers_LastName ON Customers(last_name);
 
 -- =============================================
 -- Sample Data (Optional - Remove for production)

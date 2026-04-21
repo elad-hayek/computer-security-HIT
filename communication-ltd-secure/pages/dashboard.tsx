@@ -3,32 +3,37 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { escape as htmlEscape } from "html-escaper";
 
+interface Customer {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+}
+
 export default function Dashboard() {
   const router = useRouter();
-  const [userInfo, setUserInfo] = useState<{
-    username: string;
-    email: string;
-    firstName: string | null;
-    lastName: string | null;
-    phone: string | null;
-  } | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    // SECURE: Check auth by attempting to fetch profile
-    // If cookie is invalid/missing, the endpoint will return 401
-    // No need to check localStorage anymore
-    fetchUserProfile();
+    // SECURE: Check auth by attempting to fetch customers
+    fetchCustomers();
   }, [router]);
 
-  const fetchUserProfile = async () => {
+  const fetchCustomers = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      // SECURE: No userId parameter needed - auth via cookie
-      // Credentials: include tells fetch to send cookies with the request
       const response = await fetch(`/api/user/profile`, {
         method: "GET",
         headers: {
@@ -39,37 +44,98 @@ export default function Dashboard() {
 
       if (!response.ok) {
         if (response.status === 401) {
-          // Auth failed - redirect to login
           router.push("/login");
           return;
         }
-        throw new Error("Failed to fetch user profile");
+        throw new Error("Failed to fetch customers");
       }
 
       const data = await response.json();
 
-      if (data.success && data.user) {
-        setUserInfo({
-          username: data.user.username,
-          email: data.user.email,
-          firstName: data.user.first_name,
-          lastName: data.user.last_name,
-          phone: data.user.phone,
-        });
+      if (data.success && data.customers) {
+        setCustomers(data.customers);
+        setFilteredCustomers(data.customers);
       } else {
-        setError("Failed to load user profile");
+        setError("Failed to load customers");
       }
     } catch (err) {
-      console.error("Profile fetch error:", err);
-      setError("Error fetching user profile");
+      console.error("Customers fetch error:", err);
+      setError("Error fetching customers");
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleSearch = (value: string) => {
+    setSearchTerm(value);
+    if (!value.trim()) {
+      setFilteredCustomers(customers);
+    } else {
+      const term = value.toLowerCase();
+      const filtered = customers.filter(
+        (c) =>
+          c.first_name.toLowerCase().includes(term) ||
+          c.last_name.toLowerCase().includes(term),
+      );
+      setFilteredCustomers(filtered);
+    }
+  };
+
+  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.firstName || !formData.lastName) {
+      setError("First name and last name are required");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setError(null);
+      const response = await fetch("/api/customers/add", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to add customer");
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        setMessage("Customer added successfully!");
+        setFormData({ firstName: "", lastName: "", email: "" });
+        // Refresh customers list
+        await fetchCustomers();
+        setTimeout(() => setMessage(""), 3000);
+      } else {
+        setError(data.message || "Failed to add customer");
+      }
+    } catch (err) {
+      console.error("Add customer error:", err);
+      setError("Error adding customer");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleLogout = () => {
     setMessage("Logging out...");
-    // SECURE: Call logout endpoint to clear auth cookie
     fetch("/api/auth/logout", {
       method: "POST",
       credentials: "include",
@@ -94,76 +160,115 @@ export default function Dashboard() {
     <div style={styles.container}>
       <div style={styles.card}>
         <h1>Dashboard - Communication_LTD</h1>
-        <p style={styles.secure}>✓ SECURE VERSION - User Session Active</p>
+        <p style={styles.secure}>✓ SECURE VERSION - Customer Management</p>
 
-        <div style={styles.userInfoSection}>
-          <h2>User Information</h2>
-          {userInfo && (
-            <div style={styles.userDetails}>
-              <div style={styles.detailRow}>
-                <span style={styles.label}>Username:</span>
-                <span style={styles.value}>{userInfo.username}</span>
-              </div>
-              <div style={styles.detailRow}>
-                <span style={styles.label}>Email:</span>
-                <span style={styles.value}>{userInfo.email}</span>
-              </div>
-              {/* <div style={styles.detailRow}>
-                <span style={styles.label}>First Name:</span>
-                <span style={styles.value}>
-                  {userInfo.firstName
-                    ? userInfo.firstName
-                    : "Not provided"}
-                </span>
-              </div> */}
-              <div style={styles.detailRow}>
-                <span style={styles.label}>First Name:</span>
-                {/* SECURE XSS: react sanitizes html bt default but in here we show how to do it manually*/}
-                <span
-                  style={styles.value}
-                  dangerouslySetInnerHTML={{
-                    __html:
-                      userInfo.firstName
-                        ? htmlEscape(userInfo.firstName)
-                        : "Not provided",
-                  }}
-                />
-              </div>
-             <div style={styles.detailRow}>
-                <span style={styles.label}>Last Name:</span>
-                <span style={styles.value}>
-                  {userInfo.lastName
-                    ? userInfo.lastName
-                    : "Not provided"}
-                </span>
-              </div>
-              <div style={styles.detailRow}>
-                <span style={styles.label}>Phone:</span>
-                <span style={styles.value}>
-                  {userInfo.phone || "Not provided"}
-                </span>
-              </div>
+        {/* Add Customer Form */}
+        <div style={styles.formSection}>
+          <h2>Add New Customer</h2>
+          <form onSubmit={handleSubmit} style={styles.form}>
+            <div style={styles.formGroup}>
+              <label style={styles.labelText}>First Name</label>
+              <input
+                type="text"
+                name="firstName"
+                value={formData.firstName}
+                onChange={handleFormChange}
+                placeholder="Enter first name"
+                style={styles.input}
+              />
+            </div>
+            <div style={styles.formGroup}>
+              <label style={styles.labelText}>Last Name</label>
+              <input
+                type="text"
+                name="lastName"
+                value={formData.lastName}
+                onChange={handleFormChange}
+                placeholder="Enter last name"
+                style={styles.input}
+              />
+            </div>
+            <div style={styles.formGroup}>
+              <label style={styles.labelText}>Email (Optional)</label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleFormChange}
+                placeholder="Enter email"
+                style={styles.input}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              style={styles.submitButton}
+            >
+              {isSubmitting ? "Adding..." : "Add Customer"}
+            </button>
+          </form>
+        </div>
+
+        {/* Search Bar */}
+        <div style={styles.searchSection}>
+          <h2>Search Customers</h2>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => handleSearch(e.target.value)}
+            placeholder="Search by first or last name..."
+            style={styles.searchInput}
+          />
+          <p style={styles.searchInfo}>
+            Found {filteredCustomers.length} customer
+            {filteredCustomers.length !== 1 ? "s" : ""}
+          </p>
+        </div>
+
+        {/* Customers Table */}
+        <div style={styles.tableSection}>
+          <h2>Customers</h2>
+          {filteredCustomers.length === 0 ? (
+            <p style={styles.emptyMessage}>
+              No customers yet. Add one using the form above.
+            </p>
+          ) : (
+            <div style={styles.tableContainer}>
+              <table style={styles.table}>
+                <thead>
+                  <tr style={styles.tableHeader}>
+                    <th style={styles.tableCell}>First Name</th>
+                    <th style={styles.tableCell}>Last Name</th>
+                    <th style={styles.tableCell}>Email</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCustomers.map((customer) => (
+                    <tr key={customer.id} style={styles.tableRow}>
+                      {/* SECURE: Use textContent to safely render customer names */}
+                      <td style={styles.tableCell}>{customer.first_name}</td>
+                      <td style={styles.tableCell}>{customer.last_name}</td>
+                      <td style={styles.tableCell}>
+                        {customer.email ? htmlEscape(customer.email) : "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
 
+        {/* Actions */}
         <div style={styles.actionsSection}>
-          <h2>Actions</h2>
-          <div style={styles.buttonGroup}>
-            <Link href="/change-password" style={styles.linkButton}>
-              <button style={styles.changePasswordButton}>
-                🔐 Change Password
-              </button>
-            </Link>
-            <Link href="/register" style={styles.linkButton}>
-              <button style={styles.registerButton}>
-                ➕ Register New User
-              </button>
-            </Link>
-            <button style={styles.logoutButton} onClick={handleLogout}>
-              🚪 Logout
+          <Link href="/change-password" style={styles.linkButton}>
+            <button style={styles.changePasswordButton}>
+              🔐 Change Password
             </button>
-          </div>
+          </Link>
+          <button style={styles.logoutButton} onClick={handleLogout}>
+            🚪 Logout
+          </button>
         </div>
 
         {message && (
@@ -175,8 +280,8 @@ export default function Dashboard() {
         )}
 
         <p style={styles.note}>
-          🟢 SECURE: Session stored in HTTP-only cookie. User data retrieved
-          from database. All queries parameterized.
+          🟢 SECURE: All database queries use parameterized queries. Customer
+          names rendered safely to prevent XSS attacks.
         </p>
       </div>
     </div>
@@ -187,17 +292,17 @@ const styles = {
   container: {
     display: "flex" as const,
     justifyContent: "center",
-    alignItems: "center",
+    alignItems: "flex-start",
     minHeight: "100vh",
     backgroundColor: "#f5f5f5",
-    padding: "10px",
+    padding: "20px",
   },
   card: {
     backgroundColor: "white",
     padding: "40px",
     borderRadius: "8px",
     boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-    maxWidth: "600px",
+    maxWidth: "900px",
     width: "100%",
   },
   secure: {
@@ -205,42 +310,99 @@ const styles = {
     fontWeight: "bold" as const,
     marginBottom: "30px",
   },
-  userInfoSection: {
-    marginBottom: "30px",
+  formSection: {
+    marginBottom: "40px",
     padding: "20px",
     backgroundColor: "#f9f9f9",
     borderRadius: "4px",
-    borderLeft: "4px solid #2e7d32",
+    borderLeft: "4px solid #2196F3",
   },
-  userDetails: {
+  form: {
     display: "flex" as const,
     flexDirection: "column" as const,
-    gap: "10px",
+    gap: "15px",
   },
-  detailRow: {
+  formGroup: {
     display: "flex" as const,
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "10px 0",
-    borderBottom: "1px solid #eee",
+    flexDirection: "column" as const,
+    gap: "5px",
   },
-  label: {
+  labelText: {
     fontWeight: "bold" as const,
     color: "#333",
-    minWidth: "120px",
   },
-  value: {
+  input: {
+    padding: "10px",
+    border: "1px solid #ddd",
+    borderRadius: "4px",
+    fontSize: "14px",
+  },
+  submitButton: {
+    padding: "12px",
+    backgroundColor: "#2196F3",
+    color: "white",
+    border: "none",
+    borderRadius: "4px",
+    cursor: "pointer",
+    fontWeight: "bold" as const,
+  },
+  searchSection: {
+    marginBottom: "40px",
+    padding: "20px",
+    backgroundColor: "#f9f9f9",
+    borderRadius: "4px",
+    borderLeft: "4px solid #4CAF50",
+  },
+  searchInput: {
+    width: "100%",
+    padding: "12px",
+    border: "1px solid #ddd",
+    borderRadius: "4px",
+    fontSize: "14px",
+    marginBottom: "10px",
+    boxSizing: "border-box" as const,
+  },
+  searchInfo: {
+    margin: "10px 0 0 0",
     color: "#666",
-    textAlign: "right" as const,
-    flex: 1,
+    fontSize: "14px",
+  },
+  tableSection: {
+    marginBottom: "40px",
+    padding: "20px",
+    backgroundColor: "#f9f9f9",
+    borderRadius: "4px",
+    borderLeft: "4px solid #FF9800",
+  },
+  tableContainer: {
+    overflowX: "auto" as const,
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse" as const,
+  },
+  tableHeader: {
+    backgroundColor: "#f0f0f0",
+  },
+  tableCell: {
+    padding: "12px",
+    textAlign: "left" as const,
+    borderBottom: "1px solid #ddd",
+  },
+  tableRow: {
+    // Note: Hover effect not supported with inline styles
+    // Would need CSS module or styled-components for this
+  },
+  emptyMessage: {
+    color: "#999",
+    fontStyle: "italic" as const,
+    padding: "20px",
   },
   actionsSection: {
     marginBottom: "20px",
-  },
-  buttonGroup: {
     display: "flex" as const,
-    flexDirection: "column" as const,
     gap: "10px",
+    flexDirection: "column" as const,
   },
   linkButton: {
     textDecoration: "none",
@@ -248,49 +410,35 @@ const styles = {
   changePasswordButton: {
     width: "100%",
     padding: "12px",
-    backgroundColor: "#2196F3",
+    backgroundColor: "#FF9800",
     color: "white",
     border: "none",
     borderRadius: "4px",
-    cursor: "pointer" as const,
-    fontSize: "16px",
-    fontWeight: "bold" as const,
-  },
-  registerButton: {
-    width: "100%",
-    padding: "12px",
-    backgroundColor: "#4CAF50",
-    color: "white",
-    border: "none",
-    borderRadius: "4px",
-    cursor: "pointer" as const,
-    fontSize: "16px",
+    cursor: "pointer",
     fontWeight: "bold" as const,
   },
   logoutButton: {
     width: "100%",
     padding: "12px",
-    backgroundColor: "#f44336",
+    backgroundColor: "#d32f2f",
     color: "white",
     border: "none",
     borderRadius: "4px",
-    cursor: "pointer" as const,
-    fontSize: "16px",
+    cursor: "pointer",
     fontWeight: "bold" as const,
   },
   message: {
-    marginTop: "15px",
-    padding: "10px",
+    padding: "15px",
+    marginTop: "20px",
     borderRadius: "4px",
-    backgroundColor: "#f0f0f0",
     textAlign: "center" as const,
   },
   note: {
     marginTop: "20px",
     padding: "15px",
     backgroundColor: "#e8f5e9",
-    borderRadius: "4px",
-    fontSize: "12px",
     borderLeft: "4px solid #2e7d32",
+    color: "#2e7d32",
+    fontSize: "14px",
   },
 };
