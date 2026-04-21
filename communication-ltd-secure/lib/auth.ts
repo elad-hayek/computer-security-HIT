@@ -23,6 +23,7 @@ export async function hashPasswordHMAC(
   salt: string,
 ): Promise<string> {
   // SECURE: Use crypto module built into Node.js
+  // TODO: explain this
   const hmac = crypto.createHmac("sha256", salt);
   hmac.update(password);
   return hmac.digest("hex");
