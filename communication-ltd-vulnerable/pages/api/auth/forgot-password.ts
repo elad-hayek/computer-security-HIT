@@ -15,6 +15,7 @@ import {
   addPasswordToHistory,
 } from "@/lib/auth";
 import { getPasswordConfig } from "@/lib/passwordConfig";
+import { sendPasswordResetEmail } from "@/lib/mail";
 import crypto from "crypto";
 
 type ResponseData = {
@@ -103,9 +104,8 @@ async function handleRequestToken(
 
       await runAsync(db, insertQuery);
 
-      // In real application, would send email
-      // For demo, log code to console
-      console.log(`[VULNERABLE DEMO] Reset code for ${email}: ${code}`);
+      // Send password reset email with code
+      await sendPasswordResetEmail(email, code);
 
       return res.status(200).json({
         success: true,

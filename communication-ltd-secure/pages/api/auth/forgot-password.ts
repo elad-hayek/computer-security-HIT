@@ -9,6 +9,7 @@ import {
   addPasswordToHistory,
 } from "@/lib/auth";
 import { getPasswordConfig } from "@/lib/passwordConfig";
+import { sendPasswordResetEmail } from "@/lib/mail";
 import crypto from "crypto";
 
 type ResponseData = {
@@ -105,19 +106,14 @@ async function handleRequestToken(
         expiry.toISOString(),
       ]);
 
-      // TODO: Implement email sending logic here
-      // In real application, would send email with reset link
-      // Email would contain: visit ${process.env.NEXT_PUBLIC_APP_URL}/forgot-password?token=${token}
-      // For demo purposes, log to console
-      console.log(
-        `[SECURE] Reset token sent to ${email}. Token: ${token} (valid for 1 hour)`,
-      );
+      // Send password reset email with token
+      await sendPasswordResetEmail(email, token);
 
       // SECURE: Generic message doesn't reveal whether email existed
       return res.status(200).json({
         success: true,
         message:
-          "If an account exists with this email, a reset link will be sent. Check console for token (demo only)",
+          "If an account exists with this email, a reset link will be sent",
       });
     } catch (error: any) {
       console.error("Request token error:", error);
