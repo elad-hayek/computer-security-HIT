@@ -12,7 +12,7 @@ interface Customer {
 
 export default function Dashboard() {
   const router = useRouter();
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [_customers, setCustomers] = useState<Customer[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("");

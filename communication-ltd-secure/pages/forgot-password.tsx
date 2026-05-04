@@ -30,6 +30,10 @@ export default function ForgotPassword() {
     requireLowercase: true,
     requireDigits: true,
     requireSpecialChars: true,
+    passwordHistory: 3,
+    maxLoginAttempts: 3,
+    dictionaryCheckEnabled: true,
+    dictionaryFilePath: "../wordlists/common-passwords.txt",
   });
   const [passwordValidation, setPasswordValidation] = useState({
     minLength: false,

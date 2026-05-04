@@ -3,6 +3,7 @@ import { getConnection, closeConnection, getAsync, runAsync } from "@/lib/db";
 import { hashPasswordHMAC } from "@/lib/auth";
 import { setAuthCookie } from "@/lib/cookies";
 import { getPasswordConfig } from "@/lib/passwordConfig";
+import { validateUsername, validatePasswordLength } from "@/lib/validation";
 
 type ResponseData = {
   success: boolean;
@@ -32,11 +33,25 @@ export default async function handler(
 
   const { username, password } = req.body;
 
-  if (!username || !password) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Username and password required" });
+  // Validate inputs
+  const usernameValidation = validateUsername(username);
+  if (!usernameValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      message: usernameValidation.error || "Invalid username",
+    });
   }
+
+  const passwordValidation = validatePasswordLength(password);
+  if (!passwordValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      message: passwordValidation.error || "Invalid password",
+    });
+  }
+
+  const validatedUsername = usernameValidation.value;
+  const validatedPassword = passwordValidation.value;
 
   try {
     try {
@@ -44,7 +59,7 @@ export default async function handler(
 
       // SECURE: First, fetch user by username to get the salt (parameterized)
       const userQuery = `SELECT id, username, email, salt, password_hash, login_attempts, locked_until FROM Users WHERE username = ?`;
-      const user = await getAsync(db, userQuery, [username]);
+      const user = await getAsync(db, userQuery, [validatedUsername]);
 
       if (!user) {
         // SECURE: Generic error message (no username enumeration)
@@ -67,14 +82,14 @@ export default async function handler(
       }
 
       // SECURE: Hash the provided password with the stored salt
-      const computedHash = await hashPasswordHMAC(password, user.salt);
+      const computedHash = await hashPasswordHMAC(validatedPassword, user.salt);
 
       // SECURE: Query to verify password - parameterized query with both username AND hash
       // WHY: SQLite treats ? as data placeholder, not code
       // Even if hash contains SQL injection attempts, it's treated as literal data
       const verifyQuery = `SELECT id FROM Users WHERE username = ? AND password_hash = ?`;
       const verifyResult = await getAsync(db, verifyQuery, [
-        username,
+        validatedUsername,
         computedHash,
       ]);
 

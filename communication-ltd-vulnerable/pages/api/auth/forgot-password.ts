@@ -96,8 +96,10 @@ async function handleRequestToken(
       const code = crypto.randomBytes(16).toString("hex");
       const codeHash = crypto.createHash("sha1").update(code).digest("hex");
 
-      // Set expiry to 1 hour from now
-      const expiry = new Date(Date.now() + 60 * 60 * 1000);
+      // Set expiry to 15 minutes from now
+      const expiry = new Date(Date.now() + 15 * 60 * 1000);
+
+      console.log(code)
 
       // VULNERABILITY: SQL Injection via string concatenation
       const insertQuery = `INSERT INTO PasswordResetTokens (user_id, token_hash, expiry_date, used) VALUES (${user.id}, '${codeHash}', '${expiry.toISOString()}', 0)`;

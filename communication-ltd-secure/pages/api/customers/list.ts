@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection, closeConnection, allAsync } from "@/lib/db";
 import { getAuthFromCookie } from "@/lib/cookies";
+import { validateSearchTerm } from "@/lib/validation";
 
 type ResponseData = {
   success: boolean;
@@ -45,8 +46,15 @@ export default async function handler(
     try {
       const db = await getConnection();
 
-      // SECURE: Extract and sanitize search term
-      const searchTerm = (req.query.search as string)?.trim() || "";
+      // SECURE: Extract and validate search term
+      const searchValidation = validateSearchTerm(req.query.search as string);
+      if (!searchValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: searchValidation.error || "Invalid search term",
+        });
+      }
+      const searchTerm = searchValidation.value;
 
       let query = `
         SELECT id, first_name, last_name, email 

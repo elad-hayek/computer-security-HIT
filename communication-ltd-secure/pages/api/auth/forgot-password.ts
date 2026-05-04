@@ -10,6 +10,7 @@ import {
 } from "@/lib/auth";
 import { getPasswordConfig } from "@/lib/passwordConfig";
 import { sendPasswordResetEmail } from "@/lib/mail";
+import { validateEmail } from "@/lib/validation";
 import crypto from "crypto";
 
 type ResponseData = {
@@ -66,9 +67,15 @@ async function handleRequestToken(
 ) {
   const { email } = req.body;
 
-  if (!email) {
-    return res.status(400).json({ success: false, message: "Email required" });
+  const emailValidation = validateEmail(email);
+  if (!emailValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      message: emailValidation.error || "Invalid email",
+    });
   }
+
+  const validatedEmail = emailValidation.value;
 
   try {
     try {
@@ -76,7 +83,7 @@ async function handleRequestToken(
 
       // SECURE: Parameterized query
       const userQuery = `SELECT id, email, username FROM Users WHERE email = ?`;
-      const user = await getAsync(db, userQuery, [email]);
+      const user = await getAsync(db, userQuery, [validatedEmail]);
 
       // SECURE: Generic response (doesn't leak whether email exists)
       if (!user) {
@@ -91,6 +98,8 @@ async function handleRequestToken(
       // SECURE: Generate cryptographically secure token
       const token = crypto.randomBytes(32).toString("hex");
       const tokenHash = crypto.createHash("sha1").update(token).digest("hex");
+
+      console.log(token)
 
       // TODO: decrease token expiry time in real application (e.g. 15 minutes)
       // Set expiry to 1 hour from now
@@ -107,7 +116,7 @@ async function handleRequestToken(
       ]);
 
       // Send password reset email with token
-      await sendPasswordResetEmail(email, token);
+      await sendPasswordResetEmail(validatedEmail, token);
 
       // SECURE: Generic message doesn't reveal whether email existed
       return res.status(200).json({
@@ -136,23 +145,38 @@ async function handleVerifyCode(
 ) {
   const { code, email } = req.body;
 
-  if (!code || !email) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Code and email required" });
+  const emailValidation = validateEmail(email);
+  if (!emailValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      message: emailValidation.error || "Invalid email",
+    });
   }
+
+  if (!code || typeof code !== "string") {
+    return res.status(400).json({
+      success: false,
+      message: "Code is required and must be a string",
+    });
+  }
+
+  const validatedEmail = emailValidation.value;
+  const validatedCode = code.trim();
 
   try {
     try {
       // TODO: explain this code
       // SECURE: Hash code to find it
-      const codeHash = crypto.createHash("sha1").update(code).digest("hex");
+      const codeHash = crypto
+        .createHash("sha1")
+        .update(validatedCode)
+        .digest("hex");
 
       const db = await getConnection();
 
       // SECURE: Get user by email
       const userQuery = `SELECT id FROM Users WHERE email = ?`;
-      const user = await getAsync(db, userQuery, [email]);
+      const user = await getAsync(db, userQuery, [validatedEmail]);
 
       if (!user) {
         // SECURE: Generic response (doesn't leak whether email exists)

@@ -10,6 +10,7 @@ import {
 } from "@/lib/auth";
 import { getAuthFromCookie } from "@/lib/cookies";
 import { getPasswordConfig } from "@/lib/passwordConfig";
+import { validatePasswordLength } from "@/lib/validation";
 
 type ResponseData = {
   success: boolean;
@@ -46,19 +47,40 @@ export default async function handler(
     return res.status(401).json({ success: false, message: "Unauthorized" });
   }
 
-  if (!oldPassword || !newPassword || !confirmPassword) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Missing required fields" });
+  // Validate password fields
+  const oldPasswordValidation = validatePasswordLength(oldPassword);
+  if (!oldPasswordValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      message: oldPasswordValidation.error || "Invalid old password",
+    });
   }
 
-  if (newPassword !== confirmPassword) {
+  const newPasswordValidation = validatePasswordLength(newPassword);
+  if (!newPasswordValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      message: newPasswordValidation.error || "Invalid new password",
+    });
+  }
+
+  if (!confirmPassword) {
+    return res.status(400).json({
+      success: false,
+      message: "Confirmation password is required",
+    });
+  }
+
+  const validatedOldPassword = oldPasswordValidation.value;
+  const validatedNewPassword = newPasswordValidation.value;
+
+  if (validatedNewPassword !== confirmPassword) {
     return res
       .status(400)
       .json({ success: false, message: "New passwords do not match" });
   }
 
-  if (oldPassword === newPassword) {
+  if (validatedOldPassword === validatedNewPassword) {
     return res.status(400).json({
       success: false,
       message: "New password must be different from old password",
@@ -69,7 +91,7 @@ export default async function handler(
   const config = getPasswordConfig();
 
   // Validate new password against policy
-  const validation = validatePasswordPolicy(newPassword, config);
+  const validation = validatePasswordPolicy(validatedNewPassword, config);
   if (!validation.valid) {
     return res.status(400).json({
       success: false,
@@ -79,7 +101,7 @@ export default async function handler(
   }
 
   // SECURE: Check weak password dictionary
-  const dictionaryCheck = checkPasswordDictionary(newPassword);
+  const dictionaryCheck = checkPasswordDictionary(validatedNewPassword);
   if (dictionaryCheck.isWeak) {
     return res.status(400).json({
       success: false,
@@ -103,7 +125,10 @@ export default async function handler(
       }
 
       // SECURE: Hash old password with stored salt
-      const oldPasswordHash = await hashPasswordHMAC(oldPassword, user.salt);
+      const oldPasswordHash = await hashPasswordHMAC(
+        validatedOldPassword,
+        user.salt,
+      );
 
       // SECURE: Verify old password - parameterized query
       // WHY: Ensures only the real user can change their own password
@@ -123,7 +148,7 @@ export default async function handler(
       // WHY: Prevents reusing same password multiple times
       const historyCheck = await checkPasswordHistory(
         userId,
-        newPassword,
+        validatedNewPassword,
         db,
         config,
       );
@@ -139,7 +164,7 @@ export default async function handler(
       const newSalt = generateSalt();
 
       // SECURE: Hash new password with new salt
-      const newHash = await hashPasswordHMAC(newPassword, newSalt);
+      const newHash = await hashPasswordHMAC(validatedNewPassword, newSalt);
 
       // SECURE: Parameterized update query with new salt and hash
       const updateQuery = `

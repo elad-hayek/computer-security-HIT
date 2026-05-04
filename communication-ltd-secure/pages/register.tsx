@@ -22,6 +22,10 @@ export default function Register() {
     requireLowercase: true,
     requireDigits: true,
     requireSpecialChars: true,
+    passwordHistory: 3,
+    maxLoginAttempts: 3,
+    dictionaryCheckEnabled: true,
+    dictionaryFilePath: "../wordlists/common-passwords.txt",
   });
   const [passwordValidation, setPasswordValidation] = useState({
     minLength: false,
@@ -260,8 +264,8 @@ export default function Register() {
         </p>
 
         <p style={styles.note}>
-          SECURE: Passwords hashed. Parameterized queries prevent
-          SQL injection. Password history tracked to prevent reuse.
+          SECURE: Passwords hashed. Parameterized queries prevent SQL injection.
+          Password history tracked to prevent reuse.
         </p>
       </div>
     </div>

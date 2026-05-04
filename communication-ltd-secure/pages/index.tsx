@@ -1,4 +1,5 @@
 import { GetServerSideProps } from "next";
+import { NextApiRequest } from "next";
 import { getAuthFromCookie } from "../lib/cookies";
 
 export default function Home() {
@@ -6,7 +7,7 @@ export default function Home() {
 }
 
 export const getServerSideProps: GetServerSideProps = async ({ req }) => {
-  const userId = getAuthFromCookie(req);
+  const userId = getAuthFromCookie(req as NextApiRequest);
 
   if (userId) {
     // User is logged in - redirect to dashboard

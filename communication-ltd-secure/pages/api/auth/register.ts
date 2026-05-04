@@ -10,6 +10,13 @@ import {
 import { setAuthCookie } from "@/lib/cookies";
 import { getPasswordConfig } from "@/lib/passwordConfig";
 import { escape as htmlEscape } from "html-escaper";
+import {
+  validateUsername,
+  validateEmail,
+  validateName,
+  validatePhoneOptional,
+  validatePasswordLength,
+} from "@/lib/validation";
 
 type ResponseData = {
   success: boolean;
@@ -49,25 +56,67 @@ export default async function handler(
   } = req.body;
 
   // Basic validation
-  if (!username || !email || !password || !confirmPassword) {
-    return res
-      .status(400)
-      .json({ success: false, message: htmlEscape("Missing required fields") });
+  const usernameValidation = validateUsername(username);
+  if (!usernameValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      message: htmlEscape(usernameValidation.error || ""),
+    });
+  }
+
+  const emailValidation = validateEmail(email);
+  if (!emailValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      message: htmlEscape(emailValidation.error || ""),
+    });
+  }
+
+  const firstNameValidation = validateName(firstName, "First name");
+  if (!firstNameValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      message: htmlEscape(firstNameValidation.error || ""),
+    });
+  }
+
+  const lastNameValidation = validateName(lastName, "Last name");
+  if (!lastNameValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      message: htmlEscape(lastNameValidation.error || ""),
+    });
+  }
+
+  const phoneValidation = validatePhoneOptional(phone);
+  if (!phoneValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      message: htmlEscape(phoneValidation.error || ""),
+    });
+  }
+
+  const passwordValidation = validatePasswordLength(password);
+  if (!passwordValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      message: htmlEscape(passwordValidation.error || ""),
+    });
   }
 
   if (password !== confirmPassword) {
-    return res
-      .status(400)
-      .json({ success: false, message: htmlEscape("Passwords do not match") });
+    return res.status(400).json({
+      success: false,
+      message: htmlEscape("Passwords do not match"),
+    });
   }
 
-  // Validate email format
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    return res
-      .status(400)
-      .json({ success: false, message: htmlEscape("Invalid email format") });
-  }
+  // Extract validated values
+  const validatedUsername = usernameValidation.value;
+  const validatedEmail = emailValidation.value;
+  const validatedFirstName = firstNameValidation.value;
+  const validatedLastName = lastNameValidation.value;
+  const validatedPhone = phoneValidation.value;
 
   // Get password policy from config file
   const config = getPasswordConfig();
@@ -99,7 +148,10 @@ export default async function handler(
       const db = await getConnection();
 
       const existingUserQuery = `SELECT id FROM Users WHERE username = ? OR email = ?`;
-      const existingUser = await getAsync(db, existingUserQuery, [username, email]);
+      const existingUser = await getAsync(db, existingUserQuery, [
+        validatedUsername,
+        validatedEmail,
+      ]);
       if (existingUser) {
         return res.status(400).json({
           success: false,
@@ -120,18 +172,18 @@ export default async function handler(
       `;
 
       await runAsync(db, query, [
-        username,
-        email,
-        firstName || null,
-        lastName || null,
-        phone || null,
+        validatedUsername,
+        validatedEmail,
+        validatedFirstName,
+        validatedLastName,
+        validatedPhone,
         passwordHash,
         salt,
       ]);
 
       // Get the newly created user's ID to add to password history
       const userQuery = `SELECT id FROM Users WHERE username = ?`;
-      const user = await getAsync(db, userQuery, [username]);
+      const user = await getAsync(db, userQuery, [validatedUsername]);
 
       if (user) {
         // Add initial password to history (with salt)

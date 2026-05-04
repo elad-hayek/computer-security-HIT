@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getConnection, closeConnection, runAsync } from "@/lib/db";
 import { getAuthFromCookie } from "@/lib/cookies";
+import { validateName, validateEmailOptional } from "@/lib/validation";
 
 type ResponseData = {
   success: boolean;
@@ -43,13 +44,35 @@ export default async function handler(
 
   const { firstName, lastName, email } = req.body;
 
-  // Validate required fields
-  if (!firstName || !lastName) {
+  // Validate inputs
+  const firstNameValidation = validateName(firstName, "First name");
+  if (!firstNameValidation.valid) {
     return res.status(400).json({
       success: false,
-      message: "First name and last name are required",
+      message: firstNameValidation.error || "Invalid first name",
     });
   }
+
+  const lastNameValidation = validateName(lastName, "Last name");
+  if (!lastNameValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      message: lastNameValidation.error || "Invalid last name",
+    });
+  }
+
+  const emailValidation = validateEmailOptional(email);
+  if (!emailValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      message: emailValidation.error || "Invalid email",
+    });
+  }
+
+  // Extract validated and sanitized values
+  const validatedFirstName = firstNameValidation.value;
+  const validatedLastName = lastNameValidation.value;
+  const validatedEmail = emailValidation.value;
 
   try {
     try {
@@ -65,9 +88,9 @@ export default async function handler(
       `;
 
       const result = await runAsync(db, insertQuery, [
-        firstName.trim(),
-        lastName.trim(),
-        email ? email.trim() : null,
+        validatedFirstName,
+        validatedLastName,
+        validatedEmail,
       ]);
 
       return res.status(201).json({
@@ -75,9 +98,9 @@ export default async function handler(
         message: "Customer added successfully",
         customer: {
           id: result.lastID || 0,
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          email: email ? email.trim() : null,
+          first_name: validatedFirstName,
+          last_name: validatedLastName,
+          email: validatedEmail,
         },
       });
     } catch (error) {
