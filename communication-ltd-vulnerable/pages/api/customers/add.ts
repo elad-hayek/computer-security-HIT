@@ -59,7 +59,7 @@ export default async function handler(
       // VULNERABLE: Build INSERT query with string concatenation - SQL INJECTION POSSIBLE
       // Direct concatenation of user input into SQL query
       // Attack examples:
-      //   firstName = "John', 'Doe', 'test@test.com'); INSERT INTO Users (username) VALUES ('hacker'); --"
+      //   firstName = "HACK', 'HACK', 'HACK@HACK.COM', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP), ('HACK2', 'HACK2', 'HACK2@HACK2.COM', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)--"
       //   lastName = "'; DROP TABLE Customers; --"
       //   email = "test@test.com' UNION SELECT * FROM Users; --"
       //
