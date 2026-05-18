@@ -255,7 +255,6 @@ async function handleResetPassword(
     return res.status(400).json({
       success: false,
       message: dictionaryCheck.suggestion || "Password validation failed",
-      errors: ["WEAK_PASSWORD"],
     });
   }
 
