@@ -86,7 +86,7 @@ export default function Register() {
       const data = await res.json();
 
       if (data.success) {
-        setMessage("Registration successful! Redirecting to login...");
+        setMessage("Registration successful. Redirecting to login...");
         setFormData({
           username: "",
           email: "",
@@ -124,8 +124,8 @@ export default function Register() {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1>Register - Communication_LTD</h1>
-        <p style={styles.secure}>SECURE VERSION - Production Ready</p>
+        <h1>Register</h1>
+        <p style={styles.secure}>SECURE VERSION</p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.section}>
@@ -196,21 +196,54 @@ export default function Register() {
             <div style={styles.passwordRequirements}>
               <p style={{ margin: "5px 0" }}>Password Requirements:</p>
               {passwordConfig.minLength > 0 && (
-                <div style={styles.requirement}>
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.minLength ? "green" : "gray",
+                  }}
+                >
                   At least {passwordConfig.minLength} characters
                 </div>
               )}
               {passwordConfig.requireUppercase && (
-                <div style={styles.requirement}>Uppercase letter</div>
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.hasUppercase ? "green" : "gray",
+                  }}
+                >
+                  Uppercase letter
+                </div>
               )}
               {passwordConfig.requireLowercase && (
-                <div style={styles.requirement}>Lowercase letter</div>
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.hasLowercase ? "green" : "gray",
+                  }}
+                >
+                  Lowercase letter
+                </div>
               )}
               {passwordConfig.requireDigits && (
-                <div style={styles.requirement}>Digit</div>
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.hasDigit ? "green" : "gray",
+                  }}
+                >
+                  Digit
+                </div>
               )}
               {passwordConfig.requireSpecialChars && (
-                <div style={styles.requirement}>Special character</div>
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.hasSpecial ? "green" : "gray",
+                  }}
+                >
+                  Special character
+                </div>
               )}
             </div>
 
@@ -262,11 +295,6 @@ export default function Register() {
         <p style={styles.link}>
           Already have an account? <Link href="/login">Login here</Link>
         </p>
-
-        <p style={styles.note}>
-          SECURE: Passwords hashed. Parameterized queries prevent SQL injection.
-          Password history tracked to prevent reuse.
-        </p>
       </div>
     </div>
   );
@@ -280,6 +308,7 @@ const styles = {
     minHeight: "100vh",
     backgroundColor: "#f5f5f5",
     padding: "10px",
+    fontFamily: "Arial, sans-serif",
   },
   card: {
     backgroundColor: "white",

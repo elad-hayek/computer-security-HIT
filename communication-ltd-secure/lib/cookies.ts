@@ -4,7 +4,7 @@ import { NextApiRequest, NextApiResponse } from "next";
  * Set HTTP-only authentication cookie
  * SECURITY: HTTP-only prevents XSS from accessing the cookie
  * Secure flag prevents transmission over non-HTTPS in production
- * SameSite=Strict prevents CSRF attacks
+ * SameSite=Strict allow only same-site requests to include the cookie
  */
 export function setAuthCookie(
   res: NextApiResponse,

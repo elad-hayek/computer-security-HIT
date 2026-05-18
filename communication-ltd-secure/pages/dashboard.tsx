@@ -182,8 +182,8 @@ export default function Dashboard() {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1>Dashboard - Communication_LTD</h1>
-        <p style={styles.secure}>✓ SECURE VERSION - Customer Management</p>
+        <h1>Dashboard</h1>
+        <p style={styles.secure}>SECURE VERSION</p>
 
         {/* Add Customer Form */}
         <div style={styles.formSection}>
@@ -298,11 +298,11 @@ export default function Dashboard() {
         <div style={styles.actionsSection}>
           <Link href="/change-password" style={styles.linkButton}>
             <button style={styles.changePasswordButton}>
-              🔐 Change Password
+              Change Password
             </button>
           </Link>
           <button style={styles.logoutButton} onClick={handleLogout}>
-            🚪 Logout
+            Logout
           </button>
         </div>
 
@@ -313,11 +313,6 @@ export default function Dashboard() {
         {error && (
           <div style={{ ...styles.message, color: "red" }}>{error}</div>
         )}
-
-        <p style={styles.note}>
-          🟢 SECURE: All database queries use parameterized queries. Customer
-          names rendered safely to prevent XSS attacks.
-        </p>
       </div>
     </div>
   );
@@ -331,6 +326,7 @@ const styles = {
     minHeight: "100vh",
     backgroundColor: "#f5f5f5",
     padding: "20px",
+    fontFamily: "Arial, sans-serif",
   },
   card: {
     backgroundColor: "white",

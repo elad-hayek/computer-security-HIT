@@ -35,7 +35,7 @@ export default function Login() {
 
       if (data.success) {
         setIsError(false);
-        setMessage("Login successful! Redirecting...");
+        setMessage("Login successful Redirecting...");
         // SECURE: No need to store userId in localStorage
         // Auth cookie is automatically set by the server and sent with requests
         setTimeout(() => {
@@ -56,8 +56,8 @@ export default function Login() {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1>Login - Communication_LTD</h1>
-        <p style={styles.secure}>✓ SECURE VERSION - Production Ready</p>
+        <h1>Login</h1>
+        <p style={styles.secure}>SECURE VERSION</p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <input
@@ -108,10 +108,6 @@ export default function Login() {
           </p>
         </div>
 
-        <p style={styles.note}>
-          🟢 SECURE: Account lockout after 3 failed attempts. Timing-safe
-          password comparison prevents timing attacks.
-        </p>
       </div>
     </div>
   );
@@ -124,6 +120,7 @@ const styles = {
     alignItems: "center",
     minHeight: "100vh",
     backgroundColor: "#f5f5f5",
+    fontFamily: "Arial, sans-serif",
   },
   card: {
     backgroundColor: "white",

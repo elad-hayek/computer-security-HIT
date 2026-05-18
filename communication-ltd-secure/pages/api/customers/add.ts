@@ -36,7 +36,7 @@ export default async function handler(
       .json({ success: false, message: "Method not allowed" });
   }
 
-  // SECURE: Check authentication
+  // Check authentication
   const userId = getAuthFromCookie(req);
   if (!userId) {
     return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -78,10 +78,7 @@ export default async function handler(
     try {
       const db = await getConnection();
 
-      // SECURE: Use parameterized INSERT query
-      // WHY: SQLite treats ? as data placeholder, not code
-      // Even if firstName/lastName/email contain SQL injection attempts,
-      // they are treated as literal string values for database fields
+      // Use parameterized INSERT query
       const insertQuery = `
         INSERT INTO Customers (first_name, last_name, email, created_date, updated_date)
         VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)

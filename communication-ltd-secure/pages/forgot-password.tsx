@@ -166,7 +166,7 @@ export default function ForgotPassword() {
 
       if (data.success) {
         setSuccess(true);
-        setMessage("Password reset successfully! Redirecting to login...");
+        setMessage("Password reset successfully. Redirecting to login...");
         setFormData({ newPassword: "", confirmPassword: "" });
         setTimeout(() => {
           router.push("/login");
@@ -203,8 +203,8 @@ export default function ForgotPassword() {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1>Forgot Password - Communication_LTD</h1>
-        <p style={styles.secure}>SECURE VERSION - Production Ready</p>
+        <h1>Forgot Password</h1>
+        <p style={styles.secure}>SECURE VERSION</p>
 
         <div style={styles.stepIndicator}>
           <div style={styles.stepDot(currentStep >= 1)}>1</div>
@@ -272,7 +272,7 @@ export default function ForgotPassword() {
                 }}
                 style={styles.backButton}
               >
-                ← Back
+                Back
               </button>
             </form>
           </>
@@ -309,60 +309,58 @@ export default function ForgotPassword() {
               />
 
               <div style={styles.passwordRequirements}>
-                <p style={{ margin: "5px 0", fontWeight: "bold" }}>
-                  Password Requirements:
-                </p>
-                {passwordConfig.minLength > 0 && (
-                  <div
-                    style={{
-                      ...styles.requirement,
-                      color: passwordValidation.minLength ? "green" : "gray",
-                    }}
-                  >
-                    ✓ At least {passwordConfig.minLength} characters
-                  </div>
-                )}
-                {passwordConfig.requireUppercase && (
-                  <div
-                    style={{
-                      ...styles.requirement,
-                      color: passwordValidation.hasUppercase ? "green" : "gray",
-                    }}
-                  >
-                    ✓ Uppercase letter (A-Z)
-                  </div>
-                )}
-                {passwordConfig.requireLowercase && (
-                  <div
-                    style={{
-                      ...styles.requirement,
-                      color: passwordValidation.hasLowercase ? "green" : "gray",
-                    }}
-                  >
-                    ✓ Lowercase letter (a-z)
-                  </div>
-                )}
-                {passwordConfig.requireDigits && (
-                  <div
-                    style={{
-                      ...styles.requirement,
-                      color: passwordValidation.hasDigit ? "green" : "gray",
-                    }}
-                  >
-                    ✓ Number (0-9)
-                  </div>
-                )}
-                {passwordConfig.requireSpecialChars && (
-                  <div
-                    style={{
-                      ...styles.requirement,
-                      color: passwordValidation.hasSpecial ? "green" : "gray",
-                    }}
-                  >
-                    ✓ Special character (!@#$%^&*)
-                  </div>
-                )}
-              </div>
+              <p style={{ margin: "5px 0" }}>Password Requirements:</p>
+              {passwordConfig.minLength > 0 && (
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.minLength ? "green" : "gray",
+                  }}
+                >
+                  At least {passwordConfig.minLength} characters
+                </div>
+              )}
+              {passwordConfig.requireUppercase && (
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.hasUppercase ? "green" : "gray",
+                  }}
+                >
+                  Uppercase letter
+                </div>
+              )}
+              {passwordConfig.requireLowercase && (
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.hasLowercase ? "green" : "gray",
+                  }}
+                >
+                  Lowercase letter
+                </div>
+              )}
+              {passwordConfig.requireDigits && (
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.hasDigit ? "green" : "gray",
+                  }}
+                >
+                  Digit
+                </div>
+              )}
+              {passwordConfig.requireSpecialChars && (
+                <div
+                  style={{
+                    ...styles.requirement,
+                    color: passwordValidation.hasSpecial ? "green" : "gray",
+                  }}
+                >
+                  Special character
+                </div>
+              )}
+            </div>
 
               <button
                 type="submit"
@@ -380,7 +378,7 @@ export default function ForgotPassword() {
                 }}
                 style={styles.backButton}
               >
-                ← Back
+                Back
               </button>
             </form>
           </>
@@ -410,11 +408,6 @@ export default function ForgotPassword() {
         <p style={styles.link}>
           Remember your password? <Link href="/login">Login here</Link>
         </p>
-
-        <p style={styles.note}>
-          🟢 SECURE: No email enumeration - generic response sent. Verification
-          codes are SHA-1 hashed and expire after 1 hour.
-        </p>
       </div>
     </div>
   );
@@ -427,6 +420,7 @@ const styles = {
     alignItems: "center",
     minHeight: "100vh",
     backgroundColor: "#f5f5f5",
+    fontFamily: "Arial, sans-serif",
   },
   card: {
     backgroundColor: "white",

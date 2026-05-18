@@ -16,7 +16,7 @@ type ResponseData = {
  *
  * SECURITY FEATURES:
  * 1. Parameterized queries prevent SQL injection
- * 2. Bcryptjs password comparison (timing-safe)
+ * 2. HASH password comparison (HMAC-SHA256 with salt)
  * 3. Rate limiting (tracks login attempts)
  * 4. Account lockout after N failed attempts
  * 5. Generic error messages (no information leakage)
@@ -57,12 +57,12 @@ export default async function handler(
     try {
       const db = await getConnection();
 
-      // SECURE: First, fetch user by username to get the salt (parameterized)
+      // First, fetch user by username to get the salt (parameterized)
       const userQuery = `SELECT id, username, email, salt, password_hash, login_attempts, locked_until FROM Users WHERE username = ?`;
       const user = await getAsync(db, userQuery, [validatedUsername]);
 
       if (!user) {
-        // SECURE: Generic error message (no username enumeration)
+        // Generic error message (no username enumeration)
         return res.status(401).json({
           success: false,
           message: "Invalid credentials",
@@ -71,7 +71,7 @@ export default async function handler(
 
       console.log(`Login attempt for user '${user.username}'`);
 
-      // SECURE: Check if account is locked
+      // Check if account is locked
       const config = getPasswordConfig();
       const maxAttempts = config.maxLoginAttempts;
       if (user.locked_until && new Date(user.locked_until) > new Date()) {
@@ -81,12 +81,10 @@ export default async function handler(
         });
       }
 
-      // SECURE: Hash the provided password with the stored salt
+      // Hash the provided password with the stored salt
       const computedHash = await hashPasswordHMAC(validatedPassword, user.salt);
 
-      // SECURE: Query to verify password - parameterized query with both username AND hash
-      // WHY: SQLite treats ? as data placeholder, not code
-      // Even if hash contains SQL injection attempts, it's treated as literal data
+      // Query to verify password - parameterized query with both username AND hash
       const verifyQuery = `SELECT id FROM Users WHERE username = ? AND password_hash = ?`;
       const verifyResult = await getAsync(db, verifyQuery, [
         validatedUsername,
@@ -94,7 +92,7 @@ export default async function handler(
       ]);
 
       if (!verifyResult) {
-        // SECURE: Password doesn't match - increment login attempts
+        // Password doesn't match - increment login attempts
         const newAttempts = user.login_attempts + 1;
         let lockedUntil = null;
 
@@ -107,18 +105,18 @@ export default async function handler(
         const updateQuery = `UPDATE Users SET login_attempts = ?, locked_until = ? WHERE id = ?`;
         await runAsync(db, updateQuery, [newAttempts, lockedUntil, user.id]);
 
-        // SECURE: Generic error message
+        // Generic error message
         return res.status(401).json({
           success: false,
           message: "Invalid credentials",
         });
       }
 
-      // SECURE: Reset login attempts on successful login
+      // Reset login attempts on successful login
       const resetQuery = `UPDATE Users SET login_attempts = 0, locked_until = NULL WHERE id = ?`;
       await runAsync(db, resetQuery, [user.id]);
 
-      // SECURE: Set HTTP-only cookie for authentication
+      // Set HTTP-only cookie for authentication
       setAuthCookie(res, user.id);
 
       return res.status(200).json({
@@ -128,7 +126,7 @@ export default async function handler(
     } catch (error: any) {
       console.error("Login error:", error);
 
-      // SECURE: Generic error message (don't reveal database errors)
+      // Generic error message (don't reveal database errors)
       return res.status(500).json({
         success: false,
         message: "Login failed",

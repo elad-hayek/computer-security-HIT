@@ -36,7 +36,7 @@ export default async function handler(
       .json({ success: false, message: "Method not allowed" });
   }
 
-  // SECURE: Check authentication
+  // Check authentication
   const userId = getAuthFromCookie(req);
   if (!userId) {
     return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -46,7 +46,7 @@ export default async function handler(
     try {
       const db = await getConnection();
 
-      // SECURE: Extract and validate search term
+      // Extract and validate search term
       const searchValidation = validateSearchTerm(req.query.search as string);
       if (!searchValidation.valid) {
         return res.status(400).json({
@@ -62,10 +62,10 @@ export default async function handler(
       `;
       let params: any[] = [];
 
-      // SECURE: Build parameterized query with search filter
+      // Build parameterized query with search filter
       if (searchTerm) {
         // Search by first_name OR last_name using LIKE with wildcards
-        // WHY: Parameterized queries treat % as literal data when in params array
+        // Parameterized queries treat % as literal data when in params array
         query += ` WHERE first_name LIKE ? OR last_name LIKE ?`;
         const searchPattern = `%${searchTerm}%`;
         params = [searchPattern, searchPattern];
@@ -73,8 +73,7 @@ export default async function handler(
 
       query += ` ORDER BY first_name, last_name`;
 
-      // SECURE: Use parameterized query to fetch customers
-      // WHY: SQLite treats ? as data placeholder, not code
+      // Use parameterized query to fetch customers
       const customers = await allAsync(db, query, params);
 
       return res.status(200).json({

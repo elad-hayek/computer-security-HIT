@@ -139,7 +139,6 @@ export default async function handler(
       message: htmlEscape(
         dictionaryCheck.suggestion || "Password validation failed",
       ),
-      errors: ["WEAK_PASSWORD"],
     });
   }
 
@@ -159,13 +158,13 @@ export default async function handler(
         });
       }
 
-      // SECURE: Generate random salt (16 bytes)
+      // Generate random salt 
       const salt = generateSalt();
 
-      // SECURE: Hash password with HMAC-SHA256 using the salt
+      // Hash password with HMAC-SHA256 using the salt
       const passwordHash = await hashPasswordHMAC(password, salt);
 
-      // SECURE: Use parameterized query with new fields including salt
+      // Use parameterized query with new fields including salt
       const query = `
         INSERT INTO Users (username, email, first_name, last_name, phone, password_hash, salt, created_date) 
         VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
@@ -189,7 +188,7 @@ export default async function handler(
         // Add initial password to history (with salt)
         await addPasswordToHistory(user.id, passwordHash, salt, db);
 
-        // SECURE: Set HTTP-only cookie for authentication
+        // Set HTTP-only cookie for authentication
         setAuthCookie(res, user.id);
       }
 

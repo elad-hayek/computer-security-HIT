@@ -1,29 +1,14 @@
-// SECURE VERSION - Password hashing with HMAC-SHA256 and parameterized queries
-// This file demonstrates SECURE authentication practices
-
 import crypto from "crypto";
 import { getPasswordConfig, isWeakPassword } from "./passwordConfig";
 import { allAsync } from "./db";
 
 /**
  * SECURE: Hash password using HMAC-SHA256 with salt
- * WHY THIS IS SECURE:
- * - HMAC-SHA256 provides cryptographic strength
- * - Each password has a unique 16-byte random salt
- * - Salted hashes prevent rainbow table attacks
- * - Query-based verification uses parameterized queries (no SQL injection)
- *
- * IMPLEMENTATION:
- * - Salt: Random 16-byte hex-encoded value
- * - Algorithm: HMAC-SHA256
- * - Output: Hex-encoded HMAC hash
  */
 export async function hashPasswordHMAC(
   password: string,
   salt: string,
 ): Promise<string> {
-  // SECURE: Use crypto module built into Node.js
-  // TODO: explain this
   const hmac = crypto.createHmac("sha256", salt);
   hmac.update(password);
   return hmac.digest("hex");
@@ -31,10 +16,10 @@ export async function hashPasswordHMAC(
 
 /**
  * SECURE: Generate random salt for password hashing
- * Returns 16-byte random salt as hex string
+ * Returns 10-byte random salt as hex string
  */
 export function generateSalt(): string {
-  return crypto.randomBytes(16).toString("hex");
+  return crypto.randomBytes(10).toString("hex");
 }
 
 /**

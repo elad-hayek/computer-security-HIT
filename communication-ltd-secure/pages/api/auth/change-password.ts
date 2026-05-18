@@ -41,7 +41,7 @@ export default async function handler(
 
   const { oldPassword, newPassword, confirmPassword } = req.body;
 
-  // SECURE: Extract userId from authentication cookie (not from request body)
+  // Extract userId from authentication cookie (not from request body)
   const userId = getAuthFromCookie(req);
   if (!userId) {
     return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -100,13 +100,12 @@ export default async function handler(
     });
   }
 
-  // SECURE: Check weak password dictionary
+  // Check weak password dictionary
   const dictionaryCheck = checkPasswordDictionary(validatedNewPassword);
   if (dictionaryCheck.isWeak) {
     return res.status(400).json({
       success: false,
       message: dictionaryCheck.suggestion || "Password validation failed",
-      errors: ["WEAK_PASSWORD"],
     });
   }
 
@@ -114,7 +113,7 @@ export default async function handler(
     try {
       const db = await getConnection();
 
-      // SECURE: Parameterized query to fetch user with salt
+      // Parameterized query to fetch user with salt
       const userQuery = `SELECT id, password_hash, salt FROM Users WHERE id = ?`;
       const user = await getAsync(db, userQuery, [userId]);
 
@@ -124,13 +123,13 @@ export default async function handler(
           .json({ success: false, message: "User not found" });
       }
 
-      // SECURE: Hash old password with stored salt
+      // Hash old password with stored salt
       const oldPasswordHash = await hashPasswordHMAC(
         validatedOldPassword,
         user.salt,
       );
 
-      // SECURE: Verify old password - parameterized query
+      // Verify old password - parameterized query
       // WHY: Ensures only the real user can change their own password
       const verifyQuery = `SELECT id FROM Users WHERE id = ? AND password_hash = ?`;
       const verifyResult = await getAsync(db, verifyQuery, [
@@ -144,8 +143,7 @@ export default async function handler(
           .json({ success: false, message: "Old password is incorrect" });
       }
 
-      // SECURE: Check password history using PasswordHistory table
-      // WHY: Prevents reusing same password multiple times
+      // Check password history using PasswordHistory table
       const historyCheck = await checkPasswordHistory(
         userId,
         validatedNewPassword,
@@ -160,13 +158,13 @@ export default async function handler(
         });
       }
 
-      // SECURE: Generate new salt for this password change
+      // Generate new salt for this password change
       const newSalt = generateSalt();
 
-      // SECURE: Hash new password with new salt
+      // Hash new password with new salt
       const newHash = await hashPasswordHMAC(validatedNewPassword, newSalt);
 
-      // SECURE: Parameterized update query with new salt and hash
+      // Parameterized update query with new salt and hash
       const updateQuery = `
         UPDATE Users 
         SET password_hash = ?, 
@@ -177,7 +175,7 @@ export default async function handler(
 
       await runAsync(db, updateQuery, [newHash, newSalt, userId]);
 
-      // SECURE: Add new password to history (with new salt)
+      // Add new password to history (with new salt)
       await addPasswordToHistory(userId, newHash, newSalt, db);
 
       return res.status(200).json({

@@ -35,7 +35,7 @@ export default async function handler(
       .json({ success: false, message: "Method not allowed" });
   }
 
-  // SECURE: Check authentication from cookie
+  // Check authentication from cookie
   const userId = getAuthFromCookie(req);
   if (!userId) {
     return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -45,8 +45,7 @@ export default async function handler(
     try {
       const db = await getConnection();
 
-      // SECURE: Use parameterized query to fetch all customers
-      // WHY: SQLite treats ? as data placeholder, not code
+      // Use parameterized query to fetch all customers
       const customersQuery = `
         SELECT id, first_name, last_name, email 
         FROM Customers

@@ -1,12 +1,3 @@
-/**
- * Database Initialization Script for SQLite
- * This script will run with Node so it has all the necessary packages built in.
- *
- * Usage:
- * - As npm script: npm run db:init
- * - Direct: node scripts/init-db.cjs
- */
-
 const sqlite3 = require("sqlite3");
 const fs = require("fs");
 const path = require("path");
@@ -63,23 +54,12 @@ async function initializeDatabase() {
       console.log(`Created directory: ${dataDir}`);
     }
 
-    // Check if database already initialized (check for Users table)
+    // Check if database already initialized
     let db;
     const dbExists = fs.existsSync(DB_PATH);
 
     if (dbExists) {
-      db = await openDatabase(DB_PATH);
-      try {
-        await getAsync(db, "SELECT 1 FROM Users LIMIT 1");
-        console.log("Database already initialized");
-        await closeDatabase(db);
-        return;
-      } catch (e) {
-        // Table doesn't exist, proceed with initialization
-        console.log(
-          "Database exists but schema not initialized - continuing with setup...",
-        );
-      }
+      return;
     }
 
     // Open/create database connection
@@ -121,9 +101,9 @@ async function initializeDatabase() {
     }
 
     await closeDatabase(db);
-    console.log("Database initialized successfully!");
+    console.log("Database initialized successfully");
     console.log(`Database location: ${DB_PATH}`);
-    console.log("\n Setup complete! You can now run: npm run dev\n");
+    console.log("\n Setup complete. You can now run: npm run dev\n");
   } catch (error) {
     console.error("Database initialization failed:", error);
     process.exit(1);

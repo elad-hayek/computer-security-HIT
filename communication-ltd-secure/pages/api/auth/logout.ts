@@ -22,7 +22,7 @@ export default async function handler(
       .json({ success: false, message: "Method not allowed" });
   }
 
-  // SECURE: Clear the auth cookie
+  // Clear the auth cookie
   clearAuthCookie(res);
 
   return res.status(200).json({

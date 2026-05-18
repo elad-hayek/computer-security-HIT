@@ -96,34 +96,3 @@ CREATE INDEX IF NOT EXISTS IDX_PasswordResetTokens_TokenHash ON PasswordResetTok
 CREATE INDEX IF NOT EXISTS IDX_Customers_FirstName ON Customers(first_name);
 CREATE INDEX IF NOT EXISTS IDX_Customers_LastName ON Customers(last_name);
 
--- =============================================
--- Sample Data (Optional - Remove for production)
--- =============================================
--- Example user: username=testuser, password (plain for reference only): TestPass123
--- In real scenario, password_hash would contain HMAC-SHA256 hash with corresponding salt
-INSERT OR IGNORE INTO Users (id, username, email, first_name, last_name, phone, password_hash, salt, created_date)
-VALUES (
-    1,
-    'testuser',
-    'testuser@communication-ltd.com',
-    'Test',
-    'User',
-    '+1234567890',
-    '$2b$12$CuSprHMc3tpnjTB8pfhjmuSNggTR/28AqTyQsix3NbM61nCtFzQuy',
-    '0000000000000000000000000000000000000000',
-    CURRENT_TIMESTAMP
-);
-
--- =============================================
--- Setup Complete
--- =============================================
--- SQLite database initialized successfully!
--- 
--- Tables created:
--- - Users (Authentication)
--- - Customers (Customer management)
--- - PasswordResetTokens (Forgot password)
---
--- To inspect the database, use:
--- sqlite3 data/communication_ltd.db ".tables"
--- sqlite3 data/communication_ltd.db ".schema Users"

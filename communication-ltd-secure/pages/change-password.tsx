@@ -39,11 +39,10 @@ export default function ChangePassword() {
   useEffect(() => {
     // SECURE: Try to fetch profile to verify authentication
     // If not authenticated, will redirect via API response
-    // No need to store userId in localStorage
     const verifyAuth = async () => {
       try {
         const response = await fetch("/api/user/profile", {
-          credentials: "include",
+          credentials: "include", // Ensure cookies are sent for authentication
         });
         if (!response.ok) {
           router.push("/login");
@@ -110,7 +109,7 @@ export default function ChangePassword() {
 
       if (data.success) {
         setSuccess(true);
-        setMessage("Password changed successfully!");
+        setMessage("Password changed successfully");
         setFormData({
           oldPassword: "",
           newPassword: "",
@@ -148,8 +147,8 @@ export default function ChangePassword() {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1>Change Password - Communication_LTD</h1>
-        <p style={styles.secure}>SECURE VERSION - Production Ready</p>
+        <h1>Change Password</h1>
+        <p style={styles.secure}>SECURE VERSION</p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <input
@@ -278,10 +277,6 @@ export default function ChangePassword() {
         <p style={styles.link}>
           <Link href="/dashboard">Back to Dashboard</Link>
         </p>
-
-        <p style={styles.note}>
-          🟢 SECURE: Password history checked to prevent reuse.
-        </p>
       </div>
     </div>
   );
@@ -295,6 +290,7 @@ const styles = {
     minHeight: "100vh",
     backgroundColor: "#f5f5f5",
     padding: "10px",
+    fontFamily: "Arial, sans-serif",
   },
   card: {
     backgroundColor: "white",

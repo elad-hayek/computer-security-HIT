@@ -30,13 +30,13 @@ type ResponseData = {
  *
  * SECURITY FEATURES:
  * 1. Parameterized queries prevent SQL injection
- * 2. Code is generated securely with crypto.randomBytes
+ * 2. Code is generated securely
  * 3. Only hash is stored in DB (code itself sent via email)
  * 4. Generic response (doesn't reveal if email exists)
- * 5. Code expires after 1 hour
+ * 5. Code expires after 15 minutes
  * 6. Code marked as used (prevent reuse)
  * 7. Password history check (prevent password reuse)
- * 8. Bcryptjs password hashing with salt
+ * 8. password hashing with salt
  */
 export default async function handler(
   req: NextApiRequest,
@@ -81,11 +81,11 @@ async function handleRequestToken(
     try {
       const db = await getConnection();
 
-      // SECURE: Parameterized query
+      // Parameterized query
       const userQuery = `SELECT id, email, username FROM Users WHERE email = ?`;
       const user = await getAsync(db, userQuery, [validatedEmail]);
 
-      // SECURE: Generic response (doesn't leak whether email exists)
+      // Generic response (doesn't leak whether email exists)
       if (!user) {
         return res.status(200).json({
           success: true,
@@ -94,18 +94,16 @@ async function handleRequestToken(
         });
       }
 
-      // TODO: explain this code
-      // SECURE: Generate cryptographically secure token
-      const token = crypto.randomBytes(32).toString("hex");
+      // Generate cryptographically secure token
+      const token = crypto.randomBytes(10).toString("hex");
       const tokenHash = crypto.createHash("sha1").update(token).digest("hex");
 
       console.log(token)
 
-      // TODO: decrease token expiry time in real application (e.g. 15 minutes)
-      // Set expiry to 1 hour from now
-      const expiry = new Date(Date.now() + 60 * 60 * 1000);
+      // Set expiry to 15 minutes from now
+      const expiry = new Date(Date.now() + 15 * 60 * 1000);
 
-      // SECURE: Parameterized insert query
+      // Parameterized insert query
       const insertQuery = `INSERT INTO PasswordResetTokens (user_id, token_hash, expiry_date, used) 
                            VALUES (?, ?, ?, 0)`;
 
@@ -118,7 +116,7 @@ async function handleRequestToken(
       // Send password reset email with token
       await sendPasswordResetEmail(validatedEmail, token);
 
-      // SECURE: Generic message doesn't reveal whether email existed
+      // Generic message doesn't reveal whether email existed
       return res.status(200).json({
         success: true,
         message:
@@ -127,7 +125,7 @@ async function handleRequestToken(
     } catch (error: any) {
       console.error("Request token error:", error);
 
-      // SECURE: Generic error message
+      // Generic error message
       return res.status(500).json({
         success: true, // Still return success to avoid email enumeration
         message:
@@ -165,8 +163,7 @@ async function handleVerifyCode(
 
   try {
     try {
-      // TODO: explain this code
-      // SECURE: Hash code to find it
+      // Hash code to find it
       const codeHash = crypto
         .createHash("sha1")
         .update(validatedCode)
@@ -174,19 +171,19 @@ async function handleVerifyCode(
 
       const db = await getConnection();
 
-      // SECURE: Get user by email
+      // Get user by email
       const userQuery = `SELECT id FROM Users WHERE email = ?`;
       const user = await getAsync(db, userQuery, [validatedEmail]);
 
       if (!user) {
-        // SECURE: Generic response (doesn't leak whether email exists)
+        // Generic response (doesn't leak whether email exists)
         return res.status(200).json({
           success: false,
           message: "Invalid code or email combination",
         });
       }
 
-      // SECURE: Parameterized query to find code
+      // Parameterized query to find code
       const codeQuery = `SELECT id, expiry_date, used FROM PasswordResetTokens 
                          WHERE token_hash = ? AND user_id = ?`;
       const codeData = await getAsync(db, codeQuery, [codeHash, user.id]);
@@ -252,7 +249,7 @@ async function handleResetPassword(
     });
   }
 
-  // SECURE: Check weak password dictionary
+  // Check weak password dictionary
   const dictionaryCheck = checkPasswordDictionary(newPassword);
   if (dictionaryCheck.isWeak) {
     return res.status(400).json({
@@ -264,12 +261,12 @@ async function handleResetPassword(
 
   try {
     try {
-      // SECURE: Hash code to find it (don't store plain codes)
+      // Hash code to find it (don't store plain codes)
       const codeHash = crypto.createHash("sha1").update(code).digest("hex");
 
       const db = await getConnection();
 
-      // SECURE: Parameterized query to find code
+      // Parameterized query to find code
       const codeQuery = `SELECT user_id, expiry_date, used FROM PasswordResetTokens 
                           WHERE token_hash = ?`;
       const codeData = await getAsync(db, codeQuery, [codeHash]);
@@ -286,7 +283,7 @@ async function handleResetPassword(
           .json({ success: false, message: "Code has expired" });
       }
 
-      // SECURE: Check password history - prevent reuse
+      // Check password history - prevent reuse
       const historyCheck = await checkPasswordHistory(
         codeData.user_id,
         newPassword,
@@ -301,13 +298,13 @@ async function handleResetPassword(
         });
       }
 
-      // SECURE: Generate new salt for this password reset
+      // Generate new salt for this password reset
       const newSalt = generateSalt();
 
-      // SECURE: Hash new password with HMAC-SHA256
+      // Hash new password with HMAC-SHA256
       const newHash = await hashPasswordHMAC(newPassword, newSalt);
 
-      // SECURE: Parameterized update query with new salt
+      // Parameterized update query with new salt
       const updateQuery = `
         UPDATE Users 
         SET password_hash = ?, salt = ?, password_changed_date = CURRENT_TIMESTAMP 
@@ -316,10 +313,10 @@ async function handleResetPassword(
 
       await runAsync(db, updateQuery, [newHash, newSalt, codeData.user_id]);
 
-      // SECURE: Add new password to history with salt
+      // Add new password to history with salt
       await addPasswordToHistory(codeData.user_id, newHash, newSalt, db);
 
-      // SECURE: Mark code as used to prevent reuse
+      // Mark code as used to prevent reuse
       const markUsedQuery = `UPDATE PasswordResetTokens SET used = 1 WHERE token_hash = ?`;
       await runAsync(db, markUsedQuery, [codeHash]);
 

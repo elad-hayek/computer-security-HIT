@@ -43,7 +43,5 @@ export async function sendPasswordResetEmail(
       `[EMAIL ERROR] Failed to send password reset email to ${email}:`,
       error.message,
     );
-    // Don't throw - allow password reset flow to continue even if email fails
-    // This ensures better UX and prevents blocking users due to email service issues
   }
 }
