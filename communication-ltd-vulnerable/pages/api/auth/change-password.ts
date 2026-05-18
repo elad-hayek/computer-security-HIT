@@ -40,8 +40,8 @@ export default async function handler(
 
   const { oldPassword, newPassword, confirmPassword } = req.body;
 
-  // VULNERABLE: Extract userId from authentication cookie (not from request body)
-  // Note: In this vulnerable version, we still verify old password like secure version
+  // Extract userId from authentication cookie (not from request body)
+  // In this vulnerable version, we still verify old password like secure version
   const userId = getAuthFromCookie(req);
   if (!userId) {
     return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -73,8 +73,7 @@ export default async function handler(
       // Get password policy from config first
       const config = getPasswordConfig();
 
-      // VULNERABLE: SQL injection via string concatenation
-      // Even though userId is numeric from cookie, demonstrates the pattern
+      // SQL injection via string concatenation
       const userQuery = `SELECT id, password_hash, salt FROM Users WHERE id = ${userId}`;
 
       const userResult = await getAsync(db, userQuery);
@@ -85,18 +84,13 @@ export default async function handler(
           .json({ success: false, message: "User not found" });
       }
 
-      // VULNERABLE: Hash old password with stored salt
+      // Hash old password with stored salt
       // Same hashing as secure (no vulnerability in hashing itself)
       const oldPasswordHash = await hashPasswordHMAC(
         oldPassword,
         userResult.salt,
       );
 
-      // VULNERABLE: Verification query uses string concatenation - SQL INJECTION POSSIBLE
-      // Attack: if oldPasswordHash contains SQL injection payload, it can bypass verification
-      // Example: oldPasswordHash = "abc' OR '1'='1"
-      // Query becomes: SELECT * FROM Users WHERE id = 123 AND password_hash = 'abc' OR '1'='1'
-      // The OR condition makes it always true, bypassing password verification!
       const verifyQuery = `SELECT id FROM Users WHERE id = ${userId} AND password_hash = '${oldPasswordHash}'`;
 
       const verifyResult = await getAsync(db, verifyQuery);
@@ -123,11 +117,10 @@ export default async function handler(
         return res.status(400).json({
           success: false,
           message: dictionaryCheck.suggestion || "Password validation failed",
-          errors: ["WEAK_PASSWORD"],
         });
       }
 
-      // VULNERABLE: Check password history with SQL injection
+      // Check password history with SQL injection
       const historyCheck = await checkPasswordHistory(
         userId,
         newPassword,
@@ -142,22 +135,18 @@ export default async function handler(
         });
       }
 
-      // VULNERABLE: Generate new salt (same as secure)
+      // Generate new salt (same as secure)
       // No vulnerability in salt generation itself
       const newSalt = generateSalt();
 
-      // VULNERABLE: Hash password using HMAC (same as secure)
+      // Hash password using HMAC (same as secure)
       const newHash = await hashPasswordHMAC(newPassword, newSalt);
 
-      // VULNERABLE: SQL injection via string concatenation in UPDATE query
-      // Attack: If newHash or newSalt contained quotes, it could break SQL syntax
-      // Example: newHash = "test'; DROP TABLE Users; --"
-      // This demonstrates SQL injection through parameter values in string concatenation
       const updateQuery = `UPDATE Users SET password_hash = '${newHash}', salt = '${newSalt}', password_changed_date = CURRENT_TIMESTAMP WHERE id = ${userId}`;
 
       await runAsync(db, updateQuery);
 
-      // VULNERABLE: Add password to history with SQL injection
+      // Add password to history with SQL injection
       await addPasswordToHistory(userId, newHash, newSalt, db);
 
       return res.status(200).json({

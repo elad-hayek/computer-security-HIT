@@ -34,7 +34,7 @@ export default function ChangePassword() {
   });
 
   useEffect(() => {
-    // VULNERABLE: Check auth by attempting to fetch profile
+    // Check auth by attempting to fetch profile
     // If cookie is invalid/missing, endpoint returns 401
     const verifyAuth = async () => {
       try {
@@ -93,8 +93,6 @@ export default function ChangePassword() {
     setIsLoading(true);
 
     try {
-      // VULNERABLE: Backend has SQL injection vulnerability
-      // Even with valid credentials, the API is vulnerable to SQLi attacks
       const res = await fetch("/api/auth/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -148,9 +146,9 @@ export default function ChangePassword() {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1>Change Password - Communication_LTD</h1>
+        <h1>Change Password</h1>
         <p style={styles.vulnerable}>
-          ⚠ VULNERABLE VERSION - Educational Purpose
+          VULNERABLE VERSION
         </p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
@@ -280,12 +278,6 @@ export default function ChangePassword() {
         <p style={styles.link}>
           <Link href="/dashboard">Back to Dashboard</Link>
         </p>
-
-        <p style={styles.note}>
-          🔴 VULNERABLE: Old password field not validated on backend. SQL
-          injection in password operations. No password history check. Passwords
-          not hashed securely.
-        </p>
       </div>
     </div>
   );
@@ -299,6 +291,7 @@ const styles = {
     minHeight: "100vh",
     backgroundColor: "#f5f5f5",
     padding: "10px",
+    fontFamily: "Arial, sans-serif",
   },
   card: {
     backgroundColor: "white",
@@ -341,7 +334,7 @@ const styles = {
   },
   button: {
     padding: "10px",
-    backgroundColor: "#2196F3",
+    backgroundColor: "#d32f2f",
     color: "white",
     border: "none",
     borderRadius: "4px",

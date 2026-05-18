@@ -35,9 +35,7 @@ export default function Login() {
 
       if (data.success) {
         setIsError(false);
-        setMessage("Login successful! Redirecting...");
-        // SECURE: No need to store userId in localStorage
-        // Auth cookie is automatically set by the server and sent with requests
+        setMessage("Login successful. Redirecting...");
         setTimeout(() => {
           router.push("/dashboard");
         }, 1500);
@@ -56,9 +54,9 @@ export default function Login() {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1>Login - Communication_LTD</h1>
+        <h1>Login</h1>
         <p style={styles.vulnerable}>
-          ⚠ VULNERABLE VERSION - Educational Purpose
+          VULNERABLE VERSION
         </p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
@@ -109,12 +107,6 @@ export default function Login() {
             <Link href="/forgot-password">Reset it here</Link>
           </p>
         </div>
-
-        <p style={styles.note}>
-          🔴 VULNERABLE: SQL injection in backend query. No rate limiting.
-          Session in localStorage (spoofable). No timing-safe password
-          comparison.
-        </p>
       </div>
     </div>
   );
@@ -127,6 +119,8 @@ const styles = {
     alignItems: "center",
     minHeight: "100vh",
     backgroundColor: "#f5f5f5",
+    fontFamily: "Arial, sans-serif",
+
   },
   card: {
     backgroundColor: "white",
@@ -154,7 +148,7 @@ const styles = {
   },
   button: {
     padding: "10px",
-    backgroundColor: "#2196F3",
+    backgroundColor: "#d32f2f",
     color: "white",
     border: "none",
     borderRadius: "4px",

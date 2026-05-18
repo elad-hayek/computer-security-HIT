@@ -51,19 +51,12 @@ export default async function handler(
     try {
       const db = await getConnection();
 
-      // VULNERABLE: Build query with string concatenation - SQL INJECTION POSSIBLE
-      // This allows SQL injection attacks in the username parameter!
-      // Attack examples:
-      //   username = "admin' --" bypasses password check
-      //   username = "' OR '1'='1' --" returns first user (often admin)
       const query = `SELECT * FROM Users WHERE username = '${username}'`;
 
-      // VULNERABLE: Direct string query with concatenation
       const user = await getAsync(db, query);
 
       if (!user) {
         // Generic error message (same as secure version)
-        // Note: Attackers can still use SQL injection to bypass this
         return res.status(401).json({
           success: false,
           message: "Invalid credentials",
@@ -79,22 +72,16 @@ export default async function handler(
         });
       }
 
-      // VULNERABLE: Hash password using HMAC with retrieved salt (same hashing as secure)
-      // The vulnerability comes from the SQL query construction below, not the hashing
+      //  Hash password using HMAC with retrieved salt (same hashing as secure)
       const computedHash = await hashPasswordHMAC(password, user.salt);
 
-      // VULNERABLE: Verification query uses string concatenation - SQL INJECTION POSSIBLE
-      // If computedHash contains SQL injection payload, it can bypass password check
-      // Example: if password produces hash like "abc' OR '1'='1", the query becomes:
-      //   SELECT * FROM Users WHERE username = 'user' AND password_hash = 'abc' OR '1'='1'
-      // This bypasses the password verification because OR '1'='1' is always true!
       const verifyQuery = `SELECT * FROM Users WHERE username = '${username}' AND password_hash = '${computedHash}'`;
 
-      // VULNERABLE: Direct string query with concatenation
+      //  Direct string query with concatenation
       const verifyResult = await getAsync(db, verifyQuery);
 
       if (!verifyResult) {
-         // VULNERABLE: Password doesn't match - increment login attempts
+         // Password doesn't match - increment login attempts
         const newAttempts = user.login_attempts + 1;
         let lockedUntil = null;
 
@@ -103,7 +90,7 @@ export default async function handler(
           lockedUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
         }
 
-        // Update failed attempts (parameterized)
+        // Update failed attempts
         const updateQuery = `UPDATE Users SET login_attempts = ${newAttempts}, locked_until = '${lockedUntil}' WHERE id = ${user.id}`;
         await runAsync(db, updateQuery);
 
@@ -115,11 +102,11 @@ export default async function handler(
         });
       }
 
-      // VULNERABLE: Reset login attempts on successful login
+      // Reset login attempts on successful login
       const resetQuery = `UPDATE Users SET login_attempts = 0, locked_until = NULL WHERE id = ${user.id}`;
       await runAsync(db, resetQuery);
 
-      // VULNERABLE: Set HTTP-only cookie (same mechanism as secure)
+      // Set HTTP-only cookie (same mechanism as secure)
       // The vulnerability is in the query, not the cookie handling
       setAuthCookie(res, user.id);
 

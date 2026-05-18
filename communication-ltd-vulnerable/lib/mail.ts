@@ -12,7 +12,7 @@ const transporter = nodemailer.createTransport({
 /**
  * Send password reset email with reset code
  * @param email - Recipient email address
- * @param token - Password reset token (6-digit or hexadecimal code)
+ * @param token - Password reset token 
  */
 export async function sendPasswordResetEmail(
   email: string,

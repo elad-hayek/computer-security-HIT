@@ -78,13 +78,13 @@ async function handleRequestToken(
     try {
       const db = await getConnection();
 
-      // VULNERABILITY: SQL Injection via string concatenation
+      // SQL Injection via string concatenation
       const query = `SELECT id, email FROM Users WHERE email = '${email}'`;
 
       const result = await allAsync(db, query);
 
       if (result.length === 0) {
-        // VULNERABILITY: Account enumeration - different response for non-existent email
+        // Account enumeration - different response for non-existent email
         return res
           .status(404)
           .json({ success: false, message: "Email not found" });
@@ -93,7 +93,7 @@ async function handleRequestToken(
       const user = result[0];
 
       // Generate code
-      const code = crypto.randomBytes(16).toString("hex");
+      const code = crypto.randomBytes(10).toString("hex");
       const codeHash = crypto.createHash("sha1").update(code).digest("hex");
 
       // Set expiry to 15 minutes from now
@@ -101,7 +101,7 @@ async function handleRequestToken(
 
       console.log(code)
 
-      // VULNERABILITY: SQL Injection via string concatenation
+      // SQL Injection via string concatenation
       const insertQuery = `INSERT INTO PasswordResetTokens (user_id, token_hash, expiry_date, used) VALUES (${user.id}, '${codeHash}', '${expiry.toISOString()}', 0)`;
 
       await runAsync(db, insertQuery);
@@ -142,12 +142,12 @@ async function handleVerifyCode(
 
   try {
     try {
-      // VULNERABILITY: Code hash without proper validation
+      // Code hash without proper validation
       const codeHash = crypto.createHash("sha1").update(code).digest("hex");
 
       const db = await getConnection();
 
-      // VULNERABILITY: SQL Injection - email parameter
+      // SQL Injection - email parameter
       const userQuery = `SELECT id FROM Users WHERE email = '${email}'`;
       const user = await getAsync(db, userQuery);
 
@@ -158,7 +158,7 @@ async function handleVerifyCode(
         });
       }
 
-      // VULNERABILITY: SQL Injection - codeHash parameter
+      // SQL Injection - codeHash parameter
       const codeQuery = `SELECT id, expiry_date, used FROM PasswordResetTokens WHERE token_hash = '${codeHash}' AND user_id = ${user.id}`;
       const codeData = await getAsync(db, codeQuery);
 
@@ -228,18 +228,17 @@ async function handleResetPassword(
     return res.status(400).json({
       success: false,
       message: dictionaryCheck.suggestion || "Password validation failed",
-      errors: ["WEAK_PASSWORD"],
     });
   }
 
   try {
     try {
-      // VULNERABILITY: Code hash without proper validation
+      // Code hash without proper validation
       const codeHash = crypto.createHash("sha1").update(code).digest("hex");
 
       const db = await getConnection();
 
-      // VULNERABILITY: SQL Injection in code query
+      // SQL Injection in code query
       const codeQuery = `SELECT user_id, expiry_date, used FROM PasswordResetTokens WHERE token_hash = '${codeHash}'`;
       const codeData = await getAsync(db, codeQuery);
 
@@ -255,26 +254,23 @@ async function handleResetPassword(
           .json({ success: false, message: "Code has expired" });
       }
 
-      // VULNERABILITY: No password history check
+      // No password history check
       // Users can reuse old passwords
 
-      // VULNERABLE: Generate new salt (same as secure, no vulnerability here)
+      // Generate new salt (same as secure, no vulnerability here)
       const newSalt = generateSalt();
 
-      // VULNERABLE: Hash password using HMAC-SHA256 (same as secure, no vulnerability here)
+      // Hash password using HMAC-SHA256 (same as secure, no vulnerability here)
       const newHash = await hashPasswordHMAC(newPassword, newSalt);
 
-      // VULNERABILITY: SQL Injection in update query
-      // If newHash or newSalt contain quotes, they can break SQL syntax
-      // Example: newHash = "test'; DROP TABLE Users; --"
       const updateQuery = `UPDATE Users SET password_hash = '${newHash}', salt = '${newSalt}', password_changed_date = CURRENT_TIMESTAMP WHERE id = ${codeData.user_id}`;
 
       await runAsync(db, updateQuery);
 
-      // VULNERABILITY: Add password to history with SQL injection
+      // Add password to history with SQL injection
       await addPasswordToHistory(codeData.user_id, newHash, newSalt, db);
 
-      // VULNERABILITY: Token NOT marked as used
+      // Token NOT marked as used
       // Can be reused multiple times (replay attack)
 
       return res.status(200).json({

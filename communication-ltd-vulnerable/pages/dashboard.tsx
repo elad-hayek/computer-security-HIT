@@ -29,7 +29,7 @@ export default function Dashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    // VULNERABLE: Check auth by attempting to fetch customers
+    // Check auth by attempting to fetch customers
     fetchCustomers();
   }, [router]);
 
@@ -184,9 +184,9 @@ export default function Dashboard() {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1>Dashboard - Communication_LTD</h1>
+        <h1>Dashboard</h1>
         <p style={styles.vulnerable}>
-          ⚠ VULNERABLE VERSION - Customer Management
+          VULNERABLE VERSION
         </p>
 
         {/* Add Customer Form */}
@@ -234,10 +234,6 @@ export default function Dashboard() {
               {isSubmitting ? "Adding..." : "Add Customer"}
             </button>
           </form>
-          <p style={styles.warning}>
-            ⚠️ VULNERABLE: Input is not sanitized. Try: &lt;img src=x
-            onerror="alert('XSS')"&gt;
-          </p>
         </div>
 
         {/* Search Bar */}
@@ -266,10 +262,6 @@ export default function Dashboard() {
               {filteredCustomers.length !== 1 ? "s" : ""}
             </p>
           )}
-          <p style={styles.warning}>
-            ⚠️ VULNERABLE: Server search vulnerable to SQL injection. Try: ' OR
-            '1'='1
-          </p>
         </div>
 
         {/* Customers Table */}
@@ -293,7 +285,6 @@ export default function Dashboard() {
                   {filteredCustomers.map((customer) => (
                     <tr key={customer.id} style={styles.tableRow}>
                       {/* VULNERABLE XSS: Customer names rendered as HTML without escaping */}
-                      {/* Attack: firstName = "<img src=x onerror=alert('XSS')>" */}
                       {/* The HTML will execute when page is rendered */}
                       <td
                         style={styles.tableCell}
@@ -323,17 +314,16 @@ export default function Dashboard() {
         <div style={styles.actionsSection}>
           <Link href="/change-password" style={styles.linkButton}>
             <button style={styles.changePasswordButton}>
-              🔐 Change Password
+              Change Password
             </button>
           </Link>
           <button style={styles.logoutButton} onClick={handleLogout}>
-            🚪 Logout
+            Logout
           </button>
         </div>
 
         {message && (
           <div style={{ ...styles.message, color: "blue" }}>
-            {/* VULNERABLE: Message not sanitized - could contain XSS */}
             {message}
           </div>
         )}
@@ -342,11 +332,6 @@ export default function Dashboard() {
           <div style={{ ...styles.message, color: "red" }}>{error}</div>
         )}
 
-        <p style={styles.note}>
-          🔴 VULNERABLE: Database queries use string concatenation (SQL
-          injection). Customer names rendered directly as HTML without escaping
-          (stored XSS). All user input is trusted.
-        </p>
       </div>
     </div>
   );
@@ -360,6 +345,7 @@ const styles = {
     minHeight: "100vh",
     backgroundColor: "#f5f5f5",
     padding: "20px",
+    fontFamily: "Arial, sans-serif",
   },
   card: {
     backgroundColor: "white",

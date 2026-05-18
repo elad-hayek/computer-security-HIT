@@ -22,8 +22,6 @@ type ResponseData = {
  * VULNERABILITIES:
  * 1. SQL Injection via string concatenation in search filter
  * 2. Direct string concatenation allows arbitrary SQL in search parameter
- * 3. Example attack: search="' OR '1'='1" returns all customers AND executes arbitrary SQL
- * 4. Example attack: search="'; DROP TABLE Customers; --" could delete data
  */
 export default async function handler(
   req: NextApiRequest,
@@ -35,7 +33,7 @@ export default async function handler(
       .json({ success: false, message: "Method not allowed" });
   }
 
-  // VULNERABLE: Check authentication (same as secure)
+  // Check authentication (same as secure)
   const userId = getAuthFromCookie(req);
   if (!userId) {
     return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -45,7 +43,7 @@ export default async function handler(
     try {
       const db = await getConnection();
 
-      // VULNERABLE: Extract search term without proper escaping
+      // Extract search term without proper escaping
       const searchTerm = (req.query.search as string)?.trim() || "";
 
       let query = `
@@ -57,8 +55,6 @@ export default async function handler(
       // Direct concatenation of user input into SQL query
       // Attack examples:
       //   search = "' OR '1'='1" → WHERE first_name LIKE '' OR '1'='1' OR last_name LIKE '' OR '1'='1'
-      //   search = "'; DELETE FROM Customers; --" → Adds DELETE statement
-      //   search = "' UNION SELECT * FROM Users; --" → Exfiltrate user data
       if (searchTerm) {
         query += ` WHERE first_name LIKE '%${searchTerm}%' OR last_name LIKE '%${searchTerm}%'`;
       }
@@ -67,7 +63,6 @@ export default async function handler(
 
       console.log("Executing query:", query); // Log query for debugging (reveals vulnerability)
 
-      // VULNERABLE: Direct string query execution
       const customers = await allAsync(db, query);
 
       return res.status(200).json({
@@ -76,7 +71,6 @@ export default async function handler(
       });
     } catch (error: any) {
       console.error("Customer list fetch error:", error);
-      // VULNERABLE: May expose SQL syntax errors in error messages
       return res.status(500).json({
         success: false,
         message: error.message || "Internal server error",

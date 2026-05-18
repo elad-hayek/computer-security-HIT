@@ -34,7 +34,7 @@ export default async function handler(
       .json({ success: false, message: "Method not allowed" });
   }
 
-  // VULNERABLE: Extract userId from authentication cookie
+  // Extract userId from authentication cookie
   const userId = getAuthFromCookie(req);
   if (!userId) {
     return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -44,8 +44,7 @@ export default async function handler(
     try {
       const db = await getConnection();
 
-      // VULNERABLE: SQL injection via string concatenation
-      // Could inject SQL through userId if it were from user input
+      // SQL injection via string concatenation
       const customersQuery = `
         SELECT id, first_name, last_name, email 
         FROM Customers
@@ -60,7 +59,6 @@ export default async function handler(
       });
     } catch (error: any) {
       console.error("Customers fetch error:", error);
-      // VULNERABLE: May expose error details
       return res.status(500).json({
         success: false,
         message: error.message || "Internal server error",

@@ -12,7 +12,7 @@ import { getPasswordConfig, isWeakPassword } from "./passwordConfig";
  * Vulnerability comes from SQL query construction in API endpoints
  *
  * IMPLEMENTATION:
- * - Salt: Random 16-byte hex-encoded value
+ * - Salt: Random 10-byte hex-encoded value
  * - Algorithm: HMAC-SHA256
  * - Output: Hex-encoded HMAC hash
  */
@@ -28,11 +28,11 @@ export async function hashPasswordHMAC(
 
 /**
  * Generate random salt for password hashing
- * Returns 16-byte random salt as hex string
+ * Returns 10-byte random salt as hex string
  * Same as secure version
  */
 export function generateSalt(): string {
-  return crypto.randomBytes(16).toString("hex");
+  return crypto.randomBytes(10).toString("hex");
 }
 
 /**
@@ -83,8 +83,8 @@ export function validatePasswordPolicy(
 }
 
 /**
- * SECURE: Check if password is in weak password dictionary
- * SECURITY: Dictionary attack prevention
+ * Check if password is in weak password dictionary
+ * Dictionary attack prevention
  */
 export function checkPasswordDictionary(password: string): {
   isWeak: boolean;
@@ -108,7 +108,7 @@ export function checkPasswordDictionary(password: string): {
 }
 
 /**
- * VULNERABLE: Check password history with SQL injection risk
+ * Check password history with SQL injection risk
  * Uses string concatenation instead of parameterized queries
  */
 export async function checkPasswordHistory(
@@ -118,8 +118,6 @@ export async function checkPasswordHistory(
   config: any,
 ): Promise<{ valid: boolean; reason?: string }> {
   try {
-    // VULNERABLE: String concatenation - SQL injection possible
-    // If userId is not properly validated/sanitized, attacker could craft SQL injection
     const query = `
       SELECT password_hash, salt FROM PasswordHistory 
       WHERE user_id = ${userId} 
@@ -148,7 +146,7 @@ export async function checkPasswordHistory(
 }
 
 /**
- * VULNERABLE: Add password to history with SQL injection
+ * Add password to history with SQL injection
  * Uses string concatenation for database queries
  */
 export async function addPasswordToHistory(
@@ -158,8 +156,6 @@ export async function addPasswordToHistory(
   db: any,
 ): Promise<void> {
   try {
-    // VULNERABLE: String concatenation in INSERT
-    // If passwordHash or salt contains quotes, it could break SQL syntax
     const query = `
       INSERT INTO PasswordHistory (user_id, password_hash, salt, created_date)
       VALUES (${userId}, '${passwordHash}', '${salt}', CURRENT_TIMESTAMP)

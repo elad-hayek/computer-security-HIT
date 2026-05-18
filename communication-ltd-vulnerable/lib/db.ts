@@ -49,7 +49,7 @@ function openDatabase(dbPath: string): Promise<sqlite3.Database> {
 
 /**
  * Get or create database connection
- * WHY THIS MATTERS: Maintains a single connection to SQLite database
+ * Maintains a single connection to SQLite database
  */
 export async function getConnection(): Promise<sqlite3.Database> {
   if (!db) {

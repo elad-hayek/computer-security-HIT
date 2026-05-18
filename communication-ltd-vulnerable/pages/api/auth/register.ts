@@ -83,7 +83,7 @@ export default async function handler(
     });
   }
 
-  // VULNERABLE: Check password dictionary
+  // Check password dictionary
   const dictionaryCheck = checkPasswordDictionary(password);
   if (dictionaryCheck.isWeak) {
     return res.status(400).json({
@@ -91,27 +91,23 @@ export default async function handler(
       message: htmlEscape(
         dictionaryCheck.suggestion || "Password validation failed",
       ),
-      errors: ["WEAK_PASSWORD"],
     });
   }
 
   try {
     try {
       
-      // VULNERABLE: Generate salt (same as secure version)
-      // The vulnerability is in the SQL queries, not password hashing
+      // Generate salt (same as secure version)
       const salt = generateSalt();
 
-      // VULNERABLE: Hash password using HMAC-SHA256 (same as secure)
+      // Hash password using HMAC-SHA256 (same as secure)
       // The vulnerability is in the SQL queries, not password hashing
       const passwordHash = await hashPasswordHMAC(password, salt);
 
-      // VULNERABLE: Build query with string concatenation - SQL INJECTION POSSIBLE
-      // This allows SQL injection attacks!
+      // Build query with string concatenation
       // Attack examples:
       //   firstName = "<img src=x onerror=alert(1)>"
       //   phone = 050000000', 'default', 'default', CURRENT_TIMESTAMP), ('attacker', 'attacker@example.com', 'Attacker', 'User', '555-1234', 'fakehash123456', 'fakesalt123456', CURRENT_TIMESTAMP) --
-      //   salt or passwordHash could also be injected
       
       const db = await getConnection();
       
@@ -128,18 +124,17 @@ export default async function handler(
       console.log("Executing query:", query); // Log the query for debugging (vulnerable)
 
 
-      // VULNERABLE: Direct string execution
       await runAsync(db, query);
 
-      // Get the newly created user's ID (with SQL injection vulnerability)
-      const userQuery = `SELECT id FROM Users WHERE username = '${username}'`; // VULNERABLE!
+      // Get the newly created user's ID 
+      const userQuery = `SELECT id FROM Users WHERE username = '${username}'`; 
       const user = await getAsync(db, userQuery);
 
       if (user) {
-        // VULNERABLE: Password history with SQL injection
+        // Password history with SQL injection
         await addPasswordToHistory(user.id, passwordHash, salt, db);
 
-        // VULNERABLE: Set HTTP-only cookie (same as secure)
+        // Set HTTP-only cookie (same as secure)
         setAuthCookie(res, user.id);
       }
 

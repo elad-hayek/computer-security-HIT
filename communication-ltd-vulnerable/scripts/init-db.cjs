@@ -68,18 +68,7 @@ async function initializeDatabase() {
     const dbExists = fs.existsSync(DB_PATH);
 
     if (dbExists) {
-      db = await openDatabase(DB_PATH);
-      try {
-        await getAsync(db, "SELECT 1 FROM Users LIMIT 1");
-        console.log("Database already initialized");
-        await closeDatabase(db);
-        return;
-      } catch (e) {
-        // Table doesn't exist, proceed with initialization
-        console.log(
-          "Database exists but schema not initialized - continuing with setup...",
-        );
-      }
+      return;
     }
 
     // Open/create database connection
