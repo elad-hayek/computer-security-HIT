@@ -23,7 +23,7 @@ export async function sendPasswordResetEmail(
     <p>You requested a password reset for your Communication LTD account.</p>
     <p>Use this code to reset your password:</p>
     <h3 style="font-family: monospace; background: #f0f0f0; padding: 10px; border-radius: 4px;">${token}</h3>
-    <p style="color: #666; font-size: 12px; margin-top: 20px;">This code expires in 1 hour. If you didn't request this, ignore this email.</p>
+    <p style="color: #666; font-size: 12px; margin-top: 20px;">This code expires in 15 minutes. If you didn't request this, ignore this email.</p>
   `;
 
   const mailOptions = {

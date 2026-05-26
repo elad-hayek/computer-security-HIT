@@ -94,6 +94,10 @@ async function handleRequestToken(
         });
       }
 
+      // Invalidate all previous unused tokens for this user
+      const invalidateQuery = `UPDATE PasswordResetTokens SET used = 1 WHERE user_id = ?`;
+      await runAsync(db, invalidateQuery, [user.id]);
+
       // Generate cryptographically secure token
       const token = crypto.randomBytes(10).toString("hex");
       const tokenHash = crypto.createHash("sha1").update(token).digest("hex");

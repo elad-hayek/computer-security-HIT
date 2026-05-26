@@ -92,6 +92,10 @@ async function handleRequestToken(
 
       const user = result[0];
 
+      // Invalidate all previous unused tokens for this user
+      const invalidateQuery = `UPDATE PasswordResetTokens SET used = 1 WHERE user_id = ${user.id} AND used = 0`;
+      await runAsync(db, invalidateQuery);
+
       // Generate code
       const code = crypto.randomBytes(10).toString("hex");
       const codeHash = crypto.createHash("sha1").update(code).digest("hex");
