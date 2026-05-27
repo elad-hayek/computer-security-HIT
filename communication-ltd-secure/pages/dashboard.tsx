@@ -135,10 +135,6 @@ export default function Dashboard() {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to add customer");
-      }
-
       const data = await response.json();
       if (data.success) {
         setMessage("Customer added successfully!");
