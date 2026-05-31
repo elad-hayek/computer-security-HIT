@@ -305,6 +305,7 @@ const styles = {
     minHeight: "100vh",
     backgroundColor: "#f5f5f5",
     padding: "10px",
+    fontFamily: "Arial, sans-serif",
   },
   card: {
     backgroundColor: "white",
