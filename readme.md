@@ -10,6 +10,14 @@ npm install
 npm run db:init or db:reset
 npm run dev
 ```
+Create **.env.local** file in each project with the following keys:
+
+```
+DB_PATH=./data/communication_ltd.db
+GMAIL_USER=
+GMAIL_APP_PASSWORD=
+GMAIL_FROM_EMAIL=
+```
 
 ## Participants
 
